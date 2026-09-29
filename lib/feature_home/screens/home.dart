@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:gui_lungcxr/feature_home/state/patient_state.dart';
 import 'package:gui_lungcxr/feature_home/widgets/canvas_footer.dart';
+import 'package:gui_lungcxr/feature_home/widgets/canvas_header.dart';
 import 'package:gui_lungcxr/feature_home/widgets/canvas_wid.dart';
 import 'package:gui_lungcxr/feature_home/widgets/chat_wid.dart';
 import 'package:gui_lungcxr/feature_home/widgets/client_board.dart';
@@ -29,6 +30,7 @@ class Home extends StatelessWidget {
             child: Column(
               crossAxisAlignment: .stretch,
               children: [
+                CanvasHeader(),
                 Expanded(child: CanvasWid()),
                 CanvasFooter(),
               ],
