@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/state/patient_state.dart';
+import 'package:gui_lungcxr/feature_home/widgets/patient_avatar.dart';
 import 'package:provider/provider.dart';
 
 class ClientBoard extends StatelessWidget {
@@ -21,7 +22,7 @@ class ClientBoard extends StatelessWidget {
         children: [
           for (final patient in state.patients)
             .tile(
-              prefix: const Icon(FLucideIcons.user),
+              prefix: PatientAvatar(patient: patient, size: 32),
               title: Text(patient.name),
               subtitle: Text(patient.id),
               selected: patient.id == selectedId,

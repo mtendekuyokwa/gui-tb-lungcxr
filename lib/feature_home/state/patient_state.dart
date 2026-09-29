@@ -14,11 +14,13 @@ class PatientState extends ChangeNotifier {
       id: 'TB-0001',
       name: Strings.fakeName,
       imageUrl: AppImages.demoTBImage,
+      photo: AppImages.patientPhoto1,
     ),
     Patient(
       id: 'TB-0002',
       name: Strings.fakeName1,
       imageUrl: AppImages.demoTBImage,
+      photo: AppImages.patientPhoto2,
     ),
   ];
 

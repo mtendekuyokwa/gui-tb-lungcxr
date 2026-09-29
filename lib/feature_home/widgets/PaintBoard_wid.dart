@@ -1,32 +1,37 @@
 import 'package:flutter/material.dart';
+import 'package:gui_lungcxr/feature_home/models/mark.dart';
 
-/// Paints the user's marks. Stroke points are image-relative (0..1).
+/// Paints the user's marks. Mark points are image-relative (0..1).
 class PaintboardWid extends CustomPainter {
   PaintboardWid({
-    required this.strokes,
+    required this.marks,
     required this.revision,
-    required this.color,
+    required this.activeMark,
+    required this.colorOf,
   });
 
-  final List<List<Offset>> strokes;
+  final List<Mark> marks;
 
-  /// Bumped by the editor whenever [strokes] changes, since the list itself is
+  /// Bumped by the editor whenever [marks] changes, since the list itself is
   /// mutated in place.
   final int revision;
-  final Color color;
+  final int? activeMark;
+  final Color Function(Mark) colorOf;
 
   @override
   void paint(Canvas canvas, Size size) {
-    final paint = Paint()
-      ..color = color
-      ..style = .stroke
-      ..strokeWidth = (size.shortestSide * 0.006).clamp(1.5, 4)
-      ..strokeCap = .round
-      ..strokeJoin = .round;
+    final width = (size.shortestSide * 0.006).clamp(1.5, 4.0);
 
-    for (final stroke in strokes) {
+    for (final (i, mark) in marks.indexed) {
+      final paint = Paint()
+        ..color = colorOf(mark)
+        ..style = .stroke
+        ..strokeWidth = i == activeMark ? width * 1.8 : width
+        ..strokeCap = .round
+        ..strokeJoin = .round;
       final points = [
-        for (final p in stroke) Offset(p.dx * size.width, p.dy * size.height),
+        for (final p in mark.points)
+          Offset(p.dx * size.width, p.dy * size.height),
       ];
       if (points.length == 1) {
         canvas.drawCircle(
@@ -34,7 +39,6 @@ class PaintboardWid extends CustomPainter {
           paint.strokeWidth / 2,
           paint..style = .fill,
         );
-        paint.style = .stroke;
         continue;
       }
       final path = Path()..moveTo(points.first.dx, points.first.dy);
@@ -48,6 +52,6 @@ class PaintboardWid extends CustomPainter {
   @override
   bool shouldRepaint(PaintboardWid oldDelegate) =>
       oldDelegate.revision != revision ||
-      oldDelegate.strokes != strokes ||
-      oldDelegate.color != color;
+      oldDelegate.marks != marks ||
+      oldDelegate.activeMark != activeMark;
 }

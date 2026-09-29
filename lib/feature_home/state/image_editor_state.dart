@@ -1,4 +1,6 @@
 import 'package:flutter/widgets.dart';
+import 'package:gui_lungcxr/feature_home/models/lesion.dart';
+import 'package:gui_lungcxr/feature_home/models/mark.dart';
 
 enum EditorTool {
   pan,
@@ -30,19 +32,25 @@ class ImageEditorState extends ChangeNotifier {
     .saturation: 0,
   };
 
-  /// Strokes in image-relative coordinates (0..1 on both axes), so they stay
-  /// attached to the image regardless of zoom or window size. These are the
-  /// hints that will be sent to the segmentation backend.
-  final List<List<Offset>> _strokes = [];
+  /// Labelled marks; these are the hints that will be sent to the
+  /// segmentation backend.
+  final List<Mark> _marks = [];
   bool _drawing = false;
-  int _strokeRevision = 0;
+  int _markRevision = 0;
+  int? _activeMark;
   int _resetCount = 0;
   bool _xaiEnabled = false;
 
   EditorTool get tool => _tool;
-  List<List<Offset>> get strokes => _strokes;
-  bool get hasMarks => _strokes.isNotEmpty;
-  int get strokeRevision => _strokeRevision;
+  List<Mark> get marks => _marks;
+  bool get hasMarks => _marks.isNotEmpty;
+
+  /// Bumped whenever [marks] or a mark's label changes, since both are
+  /// mutated in place.
+  int get markRevision => _markRevision;
+
+  /// Index of the mark being labelled, if any.
+  int? get activeMark => _activeMark;
   bool get xaiEnabled => _xaiEnabled;
 
   /// Changes whenever adjustments are reset, so sliders can be rebuilt.
@@ -56,6 +64,7 @@ class ImageEditorState extends ChangeNotifier {
   /// Selecting the active tool again returns to [EditorTool.pan].
   void selectTool(EditorTool tool) {
     _tool = _tool == tool ? .pan : tool;
+    _activeMark = null;
     notifyListeners();
   }
 
@@ -78,33 +87,63 @@ class ImageEditorState extends ChangeNotifier {
   }
 
   void startStroke(Offset point) {
-    _strokes.add([point]);
+    _marks.add(Mark([point]));
     _drawing = true;
-    _strokeRevision++;
+    _activeMark = null;
+    _markRevision++;
     notifyListeners();
   }
 
   void extendStroke(Offset point) {
     if (!_drawing) return;
-    _strokes.last.add(point);
-    _strokeRevision++;
+    _marks.last.points.add(point);
+    _markRevision++;
     notifyListeners();
   }
 
-  void endStroke() => _drawing = false;
+  /// Finishes the stroke and opens it for labelling.
+  void endStroke() {
+    if (!_drawing) return;
+    _drawing = false;
+    _activeMark = _marks.length - 1;
+    notifyListeners();
+  }
+
+  /// Opens an existing mark for (re)labelling; null closes the label panel.
+  void selectMark(int? index) {
+    _activeMark = index;
+    _markRevision++;
+    notifyListeners();
+  }
+
+  /// Labels the active mark and closes the label panel.
+  void labelActiveMark(LesionType lesion) {
+    final index = _activeMark;
+    if (index == null) return;
+    _marks[index].lesion = lesion;
+    _activeMark = null;
+    _markRevision++;
+    notifyListeners();
+  }
+
+  void deleteMark(int index) {
+    _marks.removeAt(index);
+    _activeMark = null;
+    _drawing = false;
+    _markRevision++;
+    notifyListeners();
+  }
 
   void undoStroke() {
-    if (_strokes.isEmpty) return;
-    _strokes.removeLast();
-    _drawing = false;
-    _strokeRevision++;
-    notifyListeners();
+    if (_marks.isEmpty) return;
+    deleteMark(_marks.length - 1);
   }
 
   void clearMarks() {
-    _strokes.clear();
+    _marks.clear();
+    _activeMark = null;
     _drawing = false;
-    _strokeRevision++;
+    _markRevision++;
     notifyListeners();
   }
 

@@ -2,18 +2,12 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/state/patient_state.dart';
+import 'package:gui_lungcxr/feature_home/widgets/patient_avatar.dart';
 import 'package:provider/provider.dart';
 
 /// Bar above the canvas identifying whose X-ray is on screen.
 class CanvasHeader extends StatelessWidget {
   const new({super.key});
-
-  static String _initials(String name) => name
-      .split(' ')
-      .where((part) => part.isNotEmpty)
-      .take(2)
-      .map((part) => part[0].toUpperCase())
-      .join();
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +27,7 @@ class CanvasHeader extends StatelessWidget {
         child: Row(
           spacing: 12,
           children: [
-            FAvatar.raw(size: 36, child: Text(_initials(patient.name))),
+            PatientAvatar(patient: patient, size: 36),
             Expanded(
               child: Column(
                 crossAxisAlignment: .start,
