@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
+import 'package:gui_lungcxr/feature_home/models/mark.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
 import 'package:gui_lungcxr/feature_home/state/patient_state.dart';
 import 'package:gui_lungcxr/feature_home/widgets/PaintBoard_wid.dart';
 import 'package:gui_lungcxr/feature_home/widgets/adjustment_panel.dart';
+import 'package:gui_lungcxr/feature_home/widgets/lesion_label_panel.dart';
 import 'package:gui_lungcxr/feature_home/widgets/xray_image.dart';
 import 'package:provider/provider.dart';
 
@@ -14,7 +16,6 @@ class CanvasWid extends StatelessWidget {
 
   // Radiology viewers use a dark surround regardless of app theme.
   static const _background = Color(0xFF0B0D0E);
-  static const _markColor = Color(0xFF22D3EE);
 
   @override
   Widget build(BuildContext context) {
@@ -44,10 +45,7 @@ class CanvasWid extends StatelessWidget {
                         padding: const .all(24),
                         child: XrayImage(
                           url: patient,
-                          overlay: _MarkLayer(
-                            editor: editor,
-                            color: _markColor,
-                          ),
+                          overlay: _MarkLayer(editor: editor),
                         ),
                       ),
                     ),
@@ -60,7 +58,13 @@ class CanvasWid extends StatelessWidget {
                   child: Row(
                     crossAxisAlignment: .start,
                     children: [
-                      if (editor.tool.isAdjustment)
+                      if (editor.activeMark case final index?)
+                        LesionLabelPanel(
+                          // Fresh panel state per mark.
+                          key: ValueKey((index, editor.marks.length)),
+                          editor: editor,
+                        )
+                      else if (editor.tool.isAdjustment)
                         AdjustmentPanel(editor: editor)
                       else if (editor.tool == .mark)
                         FBadge(
@@ -139,15 +143,15 @@ class _ViewerToolbar extends StatelessWidget {
   }
 }
 
-/// Captures pointer input in mark mode and paints existing marks.
+/// Captures pointer input in mark mode, paints existing marks and shows a
+/// tappable label tag on each one.
 ///
 /// Uses a raw [Listener] rather than a gesture detector so drawing never
 /// competes with [InteractiveViewer]'s gesture recognisers.
 class _MarkLayer extends StatefulWidget {
-  const new({required this.editor, required this.color});
+  const new({required this.editor});
 
   final ImageEditorState editor;
-  final Color color;
 
   @override
   State<_MarkLayer> createState() => _MarkLayerState();
@@ -168,30 +172,57 @@ class _MarkLayerState extends State<_MarkLayer> {
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;
-        return MouseRegion(
-          cursor: marking ? SystemMouseCursors.precise : MouseCursor.defer,
-          child: Listener(
-            behavior: .opaque,
-            onPointerDown: (e) {
-              if (!marking || _pointer != null) return;
-              _pointer = e.pointer;
-              editor.startStroke(_normalize(e.localPosition, size));
-            },
-            onPointerMove: (e) {
-              if (e.pointer != _pointer) return;
-              editor.extendStroke(_normalize(e.localPosition, size));
-            },
-            onPointerUp: (e) => _end(e.pointer),
-            onPointerCancel: (e) => _end(e.pointer),
-            child: CustomPaint(
-              size: size,
-              painter: PaintboardWid(
-                strokes: editor.strokes,
-                revision: editor.strokeRevision,
-                color: widget.color,
+        return Stack(
+          clipBehavior: .none,
+          children: [
+            Positioned.fill(
+              child: MouseRegion(
+                cursor: marking
+                    ? SystemMouseCursors.precise
+                    : MouseCursor.defer,
+                child: Listener(
+                  behavior: .opaque,
+                  onPointerDown: (e) {
+                    if (!marking || _pointer != null) return;
+                    _pointer = e.pointer;
+                    editor.startStroke(_normalize(e.localPosition, size));
+                  },
+                  onPointerMove: (e) {
+                    if (e.pointer != _pointer) return;
+                    editor.extendStroke(_normalize(e.localPosition, size));
+                  },
+                  onPointerUp: (e) => _end(e.pointer),
+                  onPointerCancel: (e) => _end(e.pointer),
+                  child: CustomPaint(
+                    size: size,
+                    painter: PaintboardWid(
+                      marks: editor.marks,
+                      revision: editor.markRevision,
+                      activeMark: editor.activeMark,
+                      colorOf: (mark) => markColor(mark.lesion),
+                    ),
+                  ),
+                ),
               ),
             ),
-          ),
+            // Tags only once a stroke is finished, so they don't jump around
+            // under the pointer while drawing.
+            if (_pointer == null)
+              for (final (i, mark) in editor.marks.indexed)
+                Positioned(
+                  left: mark.anchor.dx * size.width,
+                  top: mark.anchor.dy * size.height,
+                  child: FractionalTranslation(
+                    // Centred horizontally, sitting just above the mark.
+                    translation: const Offset(-0.5, -1.25),
+                    child: _MarkTag(
+                      mark: mark,
+                      active: i == editor.activeMark,
+                      onTap: () => editor.selectMark(i),
+                    ),
+                  ),
+                ),
+          ],
         );
       },
     );
@@ -199,7 +230,43 @@ class _MarkLayerState extends State<_MarkLayer> {
 
   void _end(int pointer) {
     if (pointer != _pointer) return;
-    _pointer = null;
+    setState(() => _pointer = null);
     widget.editor.endStroke();
+  }
+}
+
+class _MarkTag extends StatelessWidget {
+  const new({required this.mark, required this.active, required this.onTap});
+
+  final Mark mark;
+  final bool active;
+  final VoidCallback onTap;
+
+  @override
+  Widget build(BuildContext context) {
+    final color = markColor(mark.lesion);
+    return MouseRegion(
+      cursor: SystemMouseCursors.click,
+      child: GestureDetector(
+        onTap: onTap,
+        child: DecoratedBox(
+          decoration: BoxDecoration(
+            color: active ? color : Colors.black.withValues(alpha: 0.7),
+            border: .all(color: color),
+            borderRadius: .circular(4),
+          ),
+          child: Padding(
+            padding: const .symmetric(horizontal: 6, vertical: 2),
+            child: Text(
+              mark.lesion?.label ?? Strings.unlabelled,
+              style: context.theme.typography.body.xs.copyWith(
+                color: active ? Colors.black : color,
+                fontWeight: .w600,
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
   }
 }
