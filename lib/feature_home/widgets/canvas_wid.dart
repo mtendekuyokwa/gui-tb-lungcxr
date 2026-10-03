@@ -3,7 +3,7 @@ import 'package:forui/forui.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/models/mark.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
-import 'package:gui_lungcxr/feature_home/state/patient_state.dart';
+import 'package:gui_lungcxr/feature_home/state/case_state.dart';
 import 'package:gui_lungcxr/feature_home/widgets/PaintBoard_wid.dart';
 import 'package:gui_lungcxr/feature_home/widgets/adjustment_panel.dart';
 import 'package:gui_lungcxr/feature_home/widgets/lesion_label_panel.dart';
@@ -20,9 +20,9 @@ class CanvasWid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final editor = context.watch<ImageEditorState>();
-    final patient = context.select<PatientState, String>(
-      (s) => s.selected.imageUrl,
-    );
+    final cases = context.watch<CaseState>();
+    final selected = cases.selected!;
+    final hasHeatmap = selected.prediction?.hasOverlay ?? false;
 
     return ClipRect(
       child: ColoredBox(
@@ -44,7 +44,11 @@ class CanvasWid extends StatelessWidget {
                       child: Padding(
                         padding: const .all(24),
                         child: XrayImage(
-                          url: patient,
+                          url: cases.imageUrl(selected.id),
+                          headers: cases.api.authHeaders,
+                          heatmapUrl: editor.xaiEnabled && hasHeatmap
+                              ? cases.overlayUrl(selected.id)
+                              : null,
                           overlay: _MarkLayer(editor: editor),
                         ),
                       ),
@@ -69,7 +73,9 @@ class CanvasWid extends StatelessWidget {
                       else if (editor.tool == .mark)
                         FBadge(
                           variant: .secondary,
-                          child: const Text(Strings.markHint),
+                          child: Text(
+                            editor.locked ? Strings.readOnly : Strings.markHint,
+                          ),
                         ),
                       const Spacer(),
                       _ViewerToolbar(
@@ -79,13 +85,13 @@ class CanvasWid extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (editor.xaiEnabled)
+                if (editor.xaiEnabled && !hasHeatmap)
                   Positioned(
                     left: 12,
                     bottom: 12,
                     child: FBadge(
                       variant: .secondary,
-                      child: const Text(Strings.xaiPending),
+                      child: const Text(Strings.xaiUnavailable),
                     ),
                   ),
               ],
@@ -131,12 +137,12 @@ class _ViewerToolbar extends StatelessWidget {
         button(
           FLucideIcons.undo2,
           Strings.undo,
-          editor.hasMarks ? editor.undoStroke : null,
+          editor.hasMarks && !editor.locked ? editor.undoStroke : null,
         ),
         button(
           FLucideIcons.eraser,
           Strings.clearMarks,
-          editor.hasMarks ? editor.clearMarks : null,
+          editor.hasMarks && !editor.locked ? editor.clearMarks : null,
         ),
       ],
     );
@@ -168,7 +174,7 @@ class _MarkLayerState extends State<_MarkLayer> {
   @override
   Widget build(BuildContext context) {
     final editor = widget.editor;
-    final marking = editor.tool == .mark;
+    final marking = editor.tool == .mark && !editor.locked;
     return LayoutBuilder(
       builder: (context, constraints) {
         final size = constraints.biggest;

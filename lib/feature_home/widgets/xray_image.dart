@@ -6,11 +6,25 @@ import 'package:gui_lungcxr/feature_home/utils/color_matrix.dart';
 import 'package:provider/provider.dart';
 
 /// Shows the X-ray at its native aspect ratio with the editor's colour
-/// adjustments applied, and stacks [overlay] exactly over the image bounds.
+/// adjustments applied, and stacks the XAI heatmap (if any) and [overlay]
+/// exactly over the image bounds.
 class XrayImage extends StatefulWidget {
-  const new({required this.url, required this.overlay, super.key});
+  const new({
+    required this.url,
+    required this.overlay,
+    this.headers = const {},
+    this.heatmapUrl,
+    super.key,
+  });
 
   final String url;
+
+  /// Sent with the image request; the backend serves images only to the
+  /// signed-in user.
+  final Map<String, String> headers;
+
+  /// Grad-CAM overlay drawn over the X-ray while XAI is on.
+  final String? heatmapUrl;
   final Widget overlay;
 
   @override
@@ -23,7 +37,8 @@ class _XrayImageState extends State<XrayImage> {
   double? _aspectRatio;
   bool _failed = false;
 
-  ImageProvider get _provider => NetworkImage(widget.url);
+  ImageProvider get _provider =>
+      NetworkImage(widget.url, headers: widget.headers);
 
   @override
   void didChangeDependencies() {
@@ -108,6 +123,16 @@ class _XrayImageState extends State<XrayImage> {
               gaplessPlayback: true,
             ),
           ),
+          if (widget.heatmapUrl case final heatmap?)
+            Opacity(
+              opacity: 0.6,
+              child: Image.network(
+                heatmap,
+                headers: widget.headers,
+                fit: .fill,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
           widget.overlay,
         ],
       ),
