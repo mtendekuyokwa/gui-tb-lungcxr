@@ -2,18 +2,27 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
-import 'package:gui_lungcxr/feature_home/state/patient_state.dart';
+import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
+import 'package:gui_lungcxr/feature_home/state/case_state.dart';
 import 'package:provider/provider.dart';
 
-/// Bar under the canvas: the model's result and the XAI toggle.
+/// Bar under the canvas: the model's reading and the XAI toggle.
 class CanvasFooter extends StatelessWidget {
   const new({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final result = context.select<PatientState, String?>(
-      (s) => s.selected.result,
+    final prediction = context.select<CaseState, Prediction?>(
+      (s) => s.selected?.prediction,
     );
+    final percent = ((prediction?.tbProbability ?? 0) * 100).round();
+    final isTb = prediction?.label == 'tb';
+    final result = switch (prediction?.state) {
+      'done' when isTb => '${Strings.modelTb} · $percent%',
+      'done' => '${Strings.modelNormal} · TB $percent%',
+      'failed' => Strings.modelFailed,
+      _ => Strings.awaitingModel,
+    };
     final editor = context.watch<ImageEditorState>();
     final theme = context.theme;
 
@@ -32,22 +41,19 @@ class CanvasFooter extends StatelessWidget {
                 spacing: 10,
                 children: [
                   Text(
-                    Strings.result,
+                    Strings.modelReading,
                     style: theme.typography.body.sm.copyWith(
                       color: theme.colors.mutedForeground,
                     ),
                   ),
                   Flexible(
                     child: FBadge(
-                      variant: switch (result) {
-                        null => .outline,
-                        'Positive' => .destructive,
-                        _ => .secondary,
+                      variant: switch (prediction?.state) {
+                        'done' when isTb => .destructive,
+                        'done' => .secondary,
+                        _ => .outline,
                       },
-                      child: Text(
-                        result ?? Strings.awaitingModel,
-                        overflow: .ellipsis,
-                      ),
+                      child: Text(result, overflow: .ellipsis),
                     ),
                   ),
                 ],

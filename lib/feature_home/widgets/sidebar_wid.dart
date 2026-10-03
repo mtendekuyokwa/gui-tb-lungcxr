@@ -37,7 +37,9 @@ class SidebarWid extends StatelessWidget {
           variant: .outline,
           onPress: editor.hasAdjustments ? editor.resetAdjustments : null,
           prefix: const Icon(FLucideIcons.rotateCcw),
-          child: const Text(Strings.resetAdjustments),
+          child: const Flexible(
+            child: Text(Strings.resetAdjustments, overflow: .ellipsis),
+          ),
         ),
       ),
       children: [

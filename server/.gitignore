@@ -1,0 +1,17 @@
+.venv/
+__pycache__/
+.pytest_cache/
+instance/
+storage/
+models/
+
+# HPC snapshot: archives, weights, logs and patient metadata stay out of git
+pipline/*.zip
+pipline/*.rar
+pipline/*.out
+pipline/*.err
+pipline/*.xlsx
+pipline/all_tb_metadata.csv
+pipline/images_metadata.csv
+pipline/**/*.pth
+pipline/.venv/
