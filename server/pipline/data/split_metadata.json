@@ -1,0 +1,16 @@
+{
+  "seed": 42,
+  "samples_per_stratum": 122,
+  "total_samples": 732,
+  "train_size": 510,
+  "val_size": 108,
+  "test_size": 114,
+  "stratum_distribution": {
+    "tb=0_quality=excellent": 122,
+    "tb=0_quality=good": 122,
+    "tb=0_quality=bad": 122,
+    "tb=1_quality=excellent": 122,
+    "tb=1_quality=good": 122,
+    "tb=1_quality=bad": 122
+  }
+}
