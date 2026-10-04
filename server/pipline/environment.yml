@@ -1,0 +1,13 @@
+name: lung_cxr_segmentation
+channels:
+  - conda-forge
+dependencies:
+  - python==3.11
+  - pip
+  - pip:
+     - simpleitk==2.5.2
+     - pandas==2.3.1
+     - scikit-learn==1.7.0
+     - pydicom==3.0.1
+     - monai==1.5.1
+
