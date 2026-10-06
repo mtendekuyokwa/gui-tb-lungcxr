@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 import 'package:gui_lungcxr/feature_home/state/case_state.dart';
+import 'package:gui_lungcxr/feature_home/utils/case_text.dart';
 import 'package:provider/provider.dart';
 
 /// Bar under the canvas: the model's reading and the XAI toggle.
@@ -15,14 +17,7 @@ class CanvasFooter extends StatelessWidget {
     final prediction = context.select<CaseState, Prediction?>(
       (s) => s.selected?.prediction,
     );
-    final percent = ((prediction?.tbProbability ?? 0) * 100).round();
     final isTb = prediction?.label == 'tb';
-    final result = switch (prediction?.state) {
-      'done' when isTb => '${Strings.modelTb} · $percent%',
-      'done' => '${Strings.modelNormal} · TB $percent%',
-      'failed' => Strings.modelFailed,
-      _ => Strings.awaitingModel,
-    };
     final editor = context.watch<ImageEditorState>();
     final theme = context.theme;
 
@@ -32,13 +27,16 @@ class CanvasFooter extends StatelessWidget {
         border: Border(top: BorderSide(color: theme.colors.border)),
       ),
       child: Padding(
-        padding: const .symmetric(horizontal: 16, vertical: 10),
+        padding: const .symmetric(
+          horizontal: AppSizes.gap16,
+          vertical: AppSizes.gap10,
+        ),
         child: Row(
-          spacing: 10,
+          spacing: AppSizes.gap10,
           children: [
             Expanded(
               child: Row(
-                spacing: 10,
+                spacing: AppSizes.gap10,
                 children: [
                   Text(
                     Strings.modelReading,
@@ -53,7 +51,10 @@ class CanvasFooter extends StatelessWidget {
                         'done' => .secondary,
                         _ => .outline,
                       },
-                      child: Text(result, overflow: .ellipsis),
+                      child: Text(
+                        modelReading(prediction),
+                        overflow: .ellipsis,
+                      ),
                     ),
                   ),
                 ],

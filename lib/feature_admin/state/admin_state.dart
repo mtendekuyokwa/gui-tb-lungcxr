@@ -1,15 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:gui_lungcxr/api/api_client.dart';
 import 'package:gui_lungcxr/api/models.dart';
-import 'package:gui_lungcxr/constants/endpoints.dart';
+import 'package:gui_lungcxr/feature_admin/api/admin_api.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 
 /// Everything the hospital admin sees: all cases, the doctors, the cases
 /// ticked for assignment and the case opened for review.
 class AdminState extends ChangeNotifier {
-  new({required this.api});
+  new({required ApiClient api}) : _api = AdminApi(api);
 
-  final ApiClient api;
+  final AdminApi _api;
 
   List<CxrCase> _cases = const [];
   List<AppUser> _doctors = const [];
@@ -39,18 +39,11 @@ class AdminState extends ChangeNotifier {
   Future<void> load() => _guard(_reload);
 
   Future<void> _reload() async {
-    final users = await api.get(Endpoints.adminUsers) as List;
     _doctors = [
-      for (final json in users)
-        if (AppUser.fromJson(json) case final user
-            when user.isDoctor && user.active)
-          user,
+      for (final user in await _api.users())
+        if (user.isDoctor && user.active) user,
     ];
-    final json = await api.get(
-      Endpoints.adminCases,
-      query: {if (_statusFilter case final status?) 'status': status.code},
-    ) as List;
-    _cases = [for (final item in json) CxrCase.fromJson(item)];
+    _cases = await _api.cases(status: _statusFilter);
     // Only cases still in the list, and still assignable, stay ticked.
     final assignable = {
       for (final c in _cases)
@@ -62,7 +55,7 @@ class AdminState extends ChangeNotifier {
   }
 
   Future<void> _fetchOpen(int id) async {
-    _open = CxrCase.fromJson(await api.get(Endpoints.adminCase(id)));
+    _open = await _api.caseDetail(id);
   }
 
   void setStatusFilter(CaseStatus? status) {
@@ -78,24 +71,25 @@ class AdminState extends ChangeNotifier {
 
   Future<void> openCase(int id) => _guard(() => _fetchOpen(id));
 
-  String imageUrl(int id) => api.url(Endpoints.caseImage(id));
+  String imageUrl(int id) => _api.imageUrl(id);
 
+  /// Headers the image widget needs to load [imageUrl].
+  Map<String, String> get imageHeaders => _api.imageHeaders;
+
+  /// Hands every ticked case to [doctorId].
   Future<bool> assign(int doctorId) => _guard(() async {
-    await api.post(Endpoints.adminAssign, {
-      'case_ids': _ticked.toList(),
-      'doctor_id': doctorId,
-    });
+    await _api.assign(caseIds: _ticked.toList(), doctorId: doctorId);
     _ticked.clear();
     await _reload();
   });
 
   Future<bool> accept(int id) => _guard(() async {
-    await api.post(Endpoints.adminAccept(id));
+    await _api.accept(id);
     await _reload();
   });
 
   Future<bool> returnToDoctor(int id, String note) => _guard(() async {
-    await api.post(Endpoints.adminReturn(id), {'note': note});
+    await _api.returnToDoctor(id, note.trim());
     await _reload();
   });
 
@@ -105,14 +99,10 @@ class AdminState extends ChangeNotifier {
     required Uint8List bytes,
     required String filename,
   }) => _guard(() async {
-    await api.upload(
-      Endpoints.adminCases,
-      fields: {
-        'patient_name': patientName.trim(),
-        if (hospitalNumber.trim().isNotEmpty)
-          'hospital_number': hospitalNumber.trim(),
-      },
-      fileField: 'image',
+    final number = hospitalNumber.trim();
+    await _api.upload(
+      patientName: patientName.trim(),
+      hospitalNumber: number.isEmpty ? null : number,
       bytes: bytes,
       filename: filename,
     );

@@ -94,7 +94,7 @@ void main() {
       final image = await HttpClient()
           .getUrl(Uri.parse(cases.imageUrl(created.id)))
           .then((request) {
-            cases.api.authHeaders.forEach(request.headers.set);
+            cases.imageHeaders.forEach(request.headers.set);
             return request.close();
           });
       expect(image.statusCode, 200);

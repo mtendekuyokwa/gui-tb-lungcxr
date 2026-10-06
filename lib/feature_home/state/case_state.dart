@@ -1,6 +1,6 @@
 import 'package:flutter/foundation.dart';
 import 'package:gui_lungcxr/api/api_client.dart';
-import 'package:gui_lungcxr/constants/endpoints.dart';
+import 'package:gui_lungcxr/feature_home/api/case_api.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 import 'package:gui_lungcxr/feature_home/state/chat_state.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
@@ -9,9 +9,9 @@ import 'package:gui_lungcxr/feature_home/state/review_state.dart';
 /// The signed-in doctor's assigned cases and the selection. Each case keeps
 /// its own editor, review and chat state so work survives switching cases.
 class CaseState extends ChangeNotifier {
-  new({required this.api, this.saveDelay});
+  new({required ApiClient api, this.saveDelay}) : _api = CaseApi(api);
 
-  final ApiClient api;
+  final CaseApi _api;
 
   /// Overrides the review autosave delay; tests use a short one.
   final Duration? saveDelay;
@@ -39,8 +39,7 @@ class CaseState extends ChangeNotifier {
 
   Future<void> load() async {
     try {
-      final json = await api.get(Endpoints.cases) as List;
-      _cases = [for (final item in json) CxrCase.fromJson(item)];
+      _cases = await _api.cases();
       _error = null;
       if (selected == null) _selectedId = _cases.firstOrNull?.id;
     } on ApiException catch (e) {
@@ -56,8 +55,11 @@ class CaseState extends ChangeNotifier {
     notifyListeners();
   }
 
-  String imageUrl(int id) => api.url(Endpoints.caseImage(id));
-  String overlayUrl(int id) => api.url(Endpoints.caseOverlay(id));
+  String imageUrl(int id) => _api.imageUrl(id);
+  String overlayUrl(int id) => _api.overlayUrl(id);
+
+  /// Headers the image widgets need to load [imageUrl] and [overlayUrl].
+  Map<String, String> get imageHeaders => _api.imageHeaders;
 
   ImageEditorState editorFor(int id) =>
       _editors.putIfAbsent(id, ImageEditorState.new);
@@ -70,13 +72,13 @@ class CaseState extends ChangeNotifier {
     final editor = editorFor(id);
     final review = delay == null
         ? ReviewState(
-            api: api,
+            api: _api,
             caseId: id,
             editor: editor,
             onCaseChanged: _replace,
           )
         : ReviewState(
-            api: api,
+            api: _api,
             caseId: id,
             editor: editor,
             onCaseChanged: _replace,

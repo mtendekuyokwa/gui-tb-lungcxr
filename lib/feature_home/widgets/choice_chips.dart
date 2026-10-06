@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:gui_lungcxr/api/models.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 
 /// A wrapping row of options; the selected ones are filled.
 class ChoiceChips extends StatelessWidget {
@@ -19,8 +20,8 @@ class ChoiceChips extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => Wrap(
-    spacing: 6,
-    runSpacing: 6,
+    spacing: AppSizes.gap6,
+    runSpacing: AppSizes.gap6,
     children: [
       for (final option in options)
         FButton(

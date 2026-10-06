@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_auth/state/session_state.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
@@ -28,16 +29,19 @@ class CanvasHeader extends StatelessWidget {
         border: Border(bottom: BorderSide(color: theme.colors.border)),
       ),
       child: Padding(
-        padding: const .symmetric(horizontal: 16, vertical: 10),
+        padding: const .symmetric(
+          horizontal: AppSizes.gap16,
+          vertical: AppSizes.gap10,
+        ),
         child: Row(
-          spacing: 12,
+          spacing: AppSizes.gap12,
           children: [
-            PatientAvatar(initials: patient.initials, size: 36),
+            PatientAvatar(initials: patient.initials, size: AppSizes.avatarMd),
             Expanded(
               child: Column(
                 crossAxisAlignment: .start,
                 mainAxisSize: .min,
-                spacing: 2,
+                spacing: AppSizes.gap2,
                 children: [
                   Text(
                     patient.patientName,

@@ -1,9 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
+import 'package:gui_lungcxr/widgets/app_brand.dart';
 import 'package:provider/provider.dart';
 
+/// Left rail: the canvas tools, the image adjustments and their reset.
 class SidebarWid extends StatelessWidget {
   const new({super.key});
 
@@ -20,19 +23,15 @@ class SidebarWid extends StatelessWidget {
         );
 
     return FSidebar(
-      style: const .delta(headerPadding: .value(.fromLTRB(0, 16, 0, 0))),
-      header: Padding(
-        padding: const .symmetric(horizontal: 16),
-        child: Row(
-          spacing: 8,
-          children: [
-            const Icon(FLucideIcons.scanEye),
-            Text(Strings.appName, style: context.theme.typography.display.lg),
-          ],
-        ),
+      style: const .delta(
+        headerPadding: .value(.fromLTRB(0, AppSizes.gap16, 0, 0)),
+      ),
+      header: const Padding(
+        padding: .symmetric(horizontal: AppSizes.gap16),
+        child: Align(alignment: .centerLeft, child: AppBrand()),
       ),
       footer: Padding(
-        padding: const .symmetric(horizontal: 16),
+        padding: const .symmetric(horizontal: AppSizes.gap16),
         child: FButton(
           variant: .outline,
           onPress: editor.hasAdjustments ? editor.resetAdjustments : null,
