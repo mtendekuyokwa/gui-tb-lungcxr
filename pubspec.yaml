@@ -61,6 +61,7 @@ dev_dependencies:
 flutter:
   assets:
     - assets/images/patients/
+    - assets/images/patients/doctor-w-tb.jpg
 
   # The following line ensures that the Material Icons font is
   # included with your application, so that you can use the icons in
