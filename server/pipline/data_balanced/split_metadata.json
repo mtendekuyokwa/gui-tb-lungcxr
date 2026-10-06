@@ -1,0 +1,22 @@
+{
+  "seed": 42,
+  "target_per_class": 3000,
+  "total_samples": 6000,
+  "train_size": 4198,
+  "val_size": 897,
+  "test_size": 905,
+  "normal_available": 6106,
+  "tb_available": 6558,
+  "quality_distribution": {
+    "normal": {
+      "excellent": 2118,
+      "good": 820,
+      "bad": 62
+    },
+    "tb": {
+      "excellent": 545,
+      "good": 1106,
+      "bad": 1349
+    }
+  }
+}

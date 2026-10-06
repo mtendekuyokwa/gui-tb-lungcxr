@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/feature_home/models/mark.dart';
+import 'package:gui_lungcxr/feature_home/utils/mark_style.dart';
 
 /// Paints the user's marks. Mark points are image-relative (0..1).
 class PaintboardWid extends CustomPainter {
@@ -20,13 +22,15 @@ class PaintboardWid extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final width = (size.shortestSide * 0.006).clamp(1.5, 4.0);
+    final width = markStrokeWidth(size);
 
     for (final (i, mark) in marks.indexed) {
       final paint = Paint()
         ..color = colorOf(mark)
         ..style = .stroke
-        ..strokeWidth = i == activeMark ? width * 1.8 : width
+        ..strokeWidth = i == activeMark
+            ? width * AppSizes.activeMarkStrokeScale
+            : width
         ..strokeCap = .round
         ..strokeJoin = .round;
       final points = [
