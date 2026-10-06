@@ -2,8 +2,9 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:gui_lungcxr/api/api_client.dart';
-import 'package:gui_lungcxr/constants/endpoints.dart';
+import 'package:gui_lungcxr/feature_home/api/case_api.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
+import 'package:gui_lungcxr/feature_home/models/review_draft.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
 
 enum SaveStatus { idle, unsaved, saving, saved, failed }
@@ -24,7 +25,7 @@ class ReviewState extends ChangeNotifier {
   static const otherDisease = 'other_disease';
   static const defaultUrgency = 'routine';
 
-  final ApiClient api;
+  final CaseApi api;
   final int caseId;
   final ImageEditorState editor;
   final ValueChanged<CxrCase> onCaseChanged;
@@ -73,7 +74,7 @@ class ReviewState extends ChangeNotifier {
   /// Fetches the case, which also marks it as opened on the backend.
   Future<void> load() async {
     try {
-      _apply(await api.get(Endpoints.caseDetail(caseId)), loadDraft: true);
+      _apply(await api.caseDetail(caseId), loadDraft: true);
       _error = null;
     } on ApiException catch (e) {
       _error = e.message;
@@ -83,12 +84,19 @@ class ReviewState extends ChangeNotifier {
   }
 
   void setVerdict(String? value) => _edit(() => _verdict = value);
+
+  /// Picks [code], or clears the verdict when it is already picked.
+  void toggleVerdict(String code) => setVerdict(code == _verdict ? null : code);
   void setNote(String value) {
     if (value != _note) _edit(() => _note = value);
   }
 
   void toggleDisease(String code) => _edit(() => _toggle(_diseases, code));
   void setFeedbackKind(String? value) => _edit(() => _feedbackKind = value);
+
+  /// Picks [code], or withdraws the flag when it is already picked.
+  void toggleFeedbackKind(String code) =>
+      setFeedbackKind(code == _feedbackKind ? null : code);
   void setFeedbackNote(String value) {
     if (value != _feedbackNote) _edit(() => _feedbackNote = value);
   }
@@ -120,18 +128,17 @@ class ReviewState extends ChangeNotifier {
     _notify();
   }
 
-  Map<String, dynamic> toJson() => {
-    'verdict': _verdict,
-    'note': _note,
-    'marks': [for (final mark in editor.marks) markToJson(mark)],
-    'disease_tags': _verdict == otherDisease ? _diseases.toList() : const [],
-    'model_feedback': _feedbackKind == null
-        ? null
-        : {'kind': _feedbackKind, 'note': _feedbackNote},
-    'further_testing': _tests.isEmpty
-        ? null
-        : {'tests': _tests.toList(), 'urgency': _urgency},
-  };
+  ReviewDraft get draft => ReviewDraft(
+    verdict: _verdict,
+    note: _note,
+    marks: editor.marks,
+    // Disease tags only mean something under the "other disease" verdict.
+    diseases: _verdict == otherDisease ? _diseases.toList() : const [],
+    feedbackKind: _feedbackKind,
+    feedbackNote: _feedbackNote,
+    tests: _tests.toList(),
+    urgency: _urgency,
+  );
 
   /// Saves the draft now if anything changed since the last save.
   Future<void> save() async {
@@ -142,7 +149,7 @@ class ReviewState extends ChangeNotifier {
     _saveStatus = .saving;
     _notify();
     try {
-      _apply(await api.put(Endpoints.review(caseId), toJson()));
+      _apply(await api.saveReview(caseId, draft));
       _error = null;
       _saveStatus = _dirty ? .unsaved : .saved;
     } on ApiException catch (e) {
@@ -165,7 +172,7 @@ class ReviewState extends ChangeNotifier {
     await save();
     if (_saveStatus == .failed || _dirty) return false;
     try {
-      _apply(await api.post(Endpoints.submitReview(caseId)));
+      _apply(await api.submitReview(caseId));
       _error = null;
       _saveStatus = .idle;
       _notify();
@@ -177,10 +184,9 @@ class ReviewState extends ChangeNotifier {
     }
   }
 
-  void _apply(dynamic json, {bool loadDraft = false}) {
+  void _apply(CxrCase detail, {bool loadDraft = false}) {
     // A response can arrive after sign-out has disposed this and the editor.
     if (_disposed) return;
-    final detail = CxrCase.fromJson(json as Map<String, dynamic>);
     _detail = detail;
     _applying = true;
     editor.locked = !detail.status.editable;

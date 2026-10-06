@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
+import 'package:gui_lungcxr/constants/app_colors.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
 import 'package:gui_lungcxr/feature_home/utils/color_matrix.dart';
@@ -26,6 +28,9 @@ class XrayImage extends StatefulWidget {
   /// Grad-CAM overlay drawn over the X-ray while XAI is on.
   final String? heatmapUrl;
   final Widget overlay;
+
+  /// The heatmap is see-through so the X-ray stays readable under it.
+  static const double _heatmapOpacity = 0.6;
 
   @override
   State<XrayImage> createState() => _XrayImageState();
@@ -84,13 +89,17 @@ class _XrayImageState extends State<XrayImage> {
     if (_failed) {
       return Column(
         mainAxisSize: .min,
-        spacing: 8,
+        spacing: AppSizes.gap8,
         children: [
-          const Icon(FLucideIcons.imageOff, color: Colors.white70, size: 32),
+          const Icon(
+            FLucideIcons.imageOff,
+            color: AppColors.onXrayBackdrop,
+            size: AppSizes.icon32,
+          ),
           Text(
             Strings.imageLoadFailed,
             style: context.theme.typography.body.sm.copyWith(
-              color: Colors.white70,
+              color: AppColors.onXrayBackdrop,
             ),
           ),
         ],
@@ -125,7 +134,7 @@ class _XrayImageState extends State<XrayImage> {
           ),
           if (widget.heatmapUrl case final heatmap?)
             Opacity(
-              opacity: 0.6,
+              opacity: XrayImage._heatmapOpacity,
               child: Image.network(
                 heatmap,
                 headers: widget.headers,

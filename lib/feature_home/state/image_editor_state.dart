@@ -22,6 +22,9 @@ class ImageEditorState extends ChangeNotifier {
   static const double minScale = 0.5;
   static const double maxScale = 8;
 
+  /// Scale change of one press of the zoom buttons.
+  static const double zoomStep = 1.25;
+
   final TransformationController transform = TransformationController();
 
   EditorTool _tool = .pan;
@@ -188,6 +191,9 @@ class ImageEditorState extends ChangeNotifier {
       ..multiply(Matrix4.translationValues(-focalPoint.dx, -focalPoint.dy, 0))
       ..multiply(transform.value);
   }
+
+  void zoomIn(Offset focalPoint) => zoom(zoomStep, focalPoint);
+  void zoomOut(Offset focalPoint) => zoom(1 / zoomStep, focalPoint);
 
   void resetZoom() => transform.value = Matrix4.identity();
 

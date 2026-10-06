@@ -1,29 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
+import 'package:gui_lungcxr/feature_home/utils/adjustment_text.dart';
 
 /// Floating slider for the active adjustment tool.
 class AdjustmentPanel extends StatelessWidget {
   const new({required this.editor, super.key});
 
   final ImageEditorState editor;
-
-  static String _label(EditorTool tool) => switch (tool) {
-    .brightness => Strings.Brightness,
-    .contrast => Strings.Contrast,
-    .hue => Strings.Hue,
-    .saturation => Strings.Saturation,
-    .pan || .mark => '',
-  };
-
-  /// Displays a -1..1 value as -100..100 (hue as degrees).
-  static String _format(EditorTool tool, double value) {
-    final shown = tool == .hue ? value * 180 : value * 100;
-    final rounded = shown.round();
-    final suffix = tool == .hue ? '°' : '';
-    return '${rounded > 0 ? '+' : ''}$rounded$suffix';
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -32,22 +18,27 @@ class AdjustmentPanel extends StatelessWidget {
     final typography = context.theme.typography;
 
     return SizedBox(
-      width: 320,
+      width: AppSizes.adjustmentPanelWidth,
       child: FCard(
         child: Padding(
-          padding: const .fromLTRB(16, 12, 8, 4),
+          padding: const .fromLTRB(
+            AppSizes.gap16,
+            AppSizes.gap12,
+            AppSizes.gap8,
+            AppSizes.gap4,
+          ),
           child: Column(
             crossAxisAlignment: .stretch,
             children: [
               Row(
                 children: [
                   Text(
-                    _label(tool),
+                    adjustmentLabel(tool),
                     style: typography.body.sm.copyWith(fontWeight: .w600),
                   ),
                   const Spacer(),
                   Text(
-                    _format(tool, value),
+                    formatAdjustment(tool, value),
                     style: typography.body.sm.copyWith(
                       color: context.theme.colors.mutedForeground,
                       fontFeatures: const [.tabularFigures()],
@@ -71,10 +62,12 @@ class AdjustmentPanel extends StatelessWidget {
                 // tool change or reset.
                 key: ValueKey((tool, editor.resetCount)),
                 control: .managedContinuous(
-                  initial: FSliderValue(max: (value + 1) / 2),
-                  onChange: (v) => editor.setAdjustment(tool, v.max * 2 - 1),
+                  initial: FSliderValue(max: adjustmentToSlider(value)),
+                  onChange: (v) =>
+                      editor.setAdjustment(tool, sliderToAdjustment(v.max)),
                 ),
-                tooltipBuilder: (_, v) => Text(_format(tool, v * 2 - 1)),
+                tooltipBuilder: (_, v) =>
+                    Text(formatAdjustment(tool, sliderToAdjustment(v))),
               ),
             ],
           ),
