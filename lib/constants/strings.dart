@@ -16,7 +16,7 @@ class Strings {
   static const fakeName = "Lindiwe msasa";
   static const fakeName1 = "John mbinga";
   static const mark = "Mark";
-  static const appName = "LungCXR";
+  static const appName = "Kazuni Lungcxr";
   static const adjust = "Adjust";
   static const pan = "Pan";
   static const resetAdjustments = "Reset adjustments";
@@ -144,4 +144,8 @@ class Strings {
 
   static const String somethingWentWrong =
       "Something Went Wrong. Please try again later.";
+
+  static String enterPassword = "Enter password";
+
+  static String tamaraBandaemail = "tbanda@mwaiwathu.com";
 }

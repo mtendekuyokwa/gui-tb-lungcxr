@@ -8,4 +8,6 @@ class AppImages {
   // file falls back to the patient's initials.
   static const String patientPhoto1 = "assets/images/patients/tb-0001.jpg";
   static const String patientPhoto2 = "assets/images/patients/tb-0002.jpg";
+  static const String doctorHoldingTb =
+      "assets/images/patients/doctor-w-tb.jpg";
 }
