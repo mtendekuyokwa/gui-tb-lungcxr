@@ -22,6 +22,9 @@ class ImageEditorState extends ChangeNotifier {
   static const double minScale = 0.5;
   static const double maxScale = 8;
 
+  /// Scale change of one press of the zoom buttons.
+  static const double zoomStep = 1.25;
+
   final TransformationController transform = TransformationController();
 
   EditorTool _tool = .pan;
@@ -40,6 +43,17 @@ class ImageEditorState extends ChangeNotifier {
   int? _activeMark;
   int _resetCount = 0;
   bool _xaiEnabled = false;
+  bool _locked = false;
+
+  /// True once the review is submitted: marks can be seen but not changed.
+  bool get locked => _locked;
+  set locked(bool value) {
+    if (value == _locked) return;
+    _locked = value;
+    _drawing = false;
+    _activeMark = null;
+    notifyListeners();
+  }
 
   EditorTool get tool => _tool;
   List<Mark> get marks => _marks;
@@ -86,7 +100,19 @@ class ImageEditorState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Replaces all marks, e.g. with the ones saved on the backend.
+  void replaceMarks(Iterable<Mark> marks) {
+    _marks
+      ..clear()
+      ..addAll(marks);
+    _drawing = false;
+    _activeMark = null;
+    _markRevision++;
+    notifyListeners();
+  }
+
   void startStroke(Offset point) {
+    if (_locked) return;
     _marks.add(Mark([point]));
     _drawing = true;
     _activeMark = null;
@@ -111,6 +137,7 @@ class ImageEditorState extends ChangeNotifier {
 
   /// Opens an existing mark for (re)labelling; null closes the label panel.
   void selectMark(int? index) {
+    if (_locked) return;
     _activeMark = index;
     _markRevision++;
     notifyListeners();
@@ -127,6 +154,7 @@ class ImageEditorState extends ChangeNotifier {
   }
 
   void deleteMark(int index) {
+    if (_locked) return;
     _marks.removeAt(index);
     _activeMark = null;
     _drawing = false;
@@ -140,6 +168,7 @@ class ImageEditorState extends ChangeNotifier {
   }
 
   void clearMarks() {
+    if (_locked) return;
     _marks.clear();
     _activeMark = null;
     _drawing = false;
@@ -162,6 +191,9 @@ class ImageEditorState extends ChangeNotifier {
       ..multiply(Matrix4.translationValues(-focalPoint.dx, -focalPoint.dy, 0))
       ..multiply(transform.value);
   }
+
+  void zoomIn(Offset focalPoint) => zoom(zoomStep, focalPoint);
+  void zoomOut(Offset focalPoint) => zoom(1 / zoomStep, focalPoint);
 
   void resetZoom() => transform.value = Matrix4.identity();
 

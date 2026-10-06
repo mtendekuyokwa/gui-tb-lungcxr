@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
-import 'package:gui_lungcxr/feature_home/models/chat_message.dart';
 import 'package:gui_lungcxr/feature_home/state/chat_state.dart';
+import 'package:gui_lungcxr/feature_home/widgets/chat_bubble.dart';
 import 'package:provider/provider.dart';
 
+/// Assistant chat for the selected case: the messages and the input.
 class ChatWid extends StatefulWidget {
   const new({super.key});
 
@@ -46,18 +48,18 @@ class _ChatWidState extends State<ChatWid> {
     final theme = context.theme;
 
     return Padding(
-      padding: const .fromLTRB(8, 0, 8, 8),
+      padding: const .fromLTRB(AppSizes.gap8, 0, AppSizes.gap8, AppSizes.gap8),
       child: FCard(
         clipBehavior: .antiAlias,
         child: Column(
           crossAxisAlignment: .stretch,
           children: [
             Padding(
-              padding: const .all(12),
+              padding: const .all(AppSizes.gap12),
               child: Row(
-                spacing: 8,
+                spacing: AppSizes.gap8,
                 children: [
-                  const Icon(FLucideIcons.bot, size: 18),
+                  const Icon(FLucideIcons.bot, size: AppSizes.icon18),
                   Text(
                     Strings.chat,
                     style: theme.typography.body.sm.copyWith(fontWeight: .w600),
@@ -78,16 +80,18 @@ class _ChatWidState extends State<ChatWid> {
                     )
                   : ListView.separated(
                       controller: _scroll,
-                      padding: const .all(12),
+                      padding: const .all(AppSizes.gap12),
                       itemCount: chat.messages.length,
-                      separatorBuilder: (_, _) => const SizedBox(height: 8),
-                      itemBuilder: (_, i) => _Bubble(message: chat.messages[i]),
+                      separatorBuilder: (_, _) =>
+                          const SizedBox(height: AppSizes.gap8),
+                      itemBuilder: (_, i) =>
+                          ChatBubble(message: chat.messages[i]),
                     ),
             ),
             Padding(
-              padding: const .all(12),
+              padding: const .all(AppSizes.gap12),
               child: Row(
-                spacing: 8,
+                spacing: AppSizes.gap8,
                 children: [
                   Expanded(
                     child: FTextField(
@@ -110,41 +114,6 @@ class _ChatWidState extends State<ChatWid> {
               ),
             ),
           ],
-        ),
-      ),
-    );
-  }
-}
-
-class _Bubble extends StatelessWidget {
-  const new({required this.message});
-
-  final ChatMessage message;
-
-  @override
-  Widget build(BuildContext context) {
-    final colors = context.theme.colors;
-    final mine = message.author == .user;
-    return Align(
-      alignment: mine ? .centerRight : .centerLeft,
-      child: ConstrainedBox(
-        constraints: const BoxConstraints(maxWidth: 260),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: mine ? colors.primary : colors.secondary,
-            borderRadius: .circular(12),
-          ),
-          child: Padding(
-            padding: const .symmetric(horizontal: 12, vertical: 8),
-            child: Text(
-              message.text,
-              style: context.theme.typography.body.sm.copyWith(
-                color: mine
-                    ? colors.primaryForeground
-                    : colors.secondaryForeground,
-              ),
-            ),
-          ),
         ),
       ),
     );

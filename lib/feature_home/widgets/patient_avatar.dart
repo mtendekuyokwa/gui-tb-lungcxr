@@ -1,26 +1,15 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
-import 'package:gui_lungcxr/feature_home/models/patient.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 
-/// Patient portrait, or their initials when there is no photo or it fails to
-/// load.
+/// The patient's initials; cases carry no portrait.
 class PatientAvatar extends StatelessWidget {
-  const new({required this.patient, this.size = 40, super.key});
+  const new({required this.initials, this.size = AppSizes.avatarLg, super.key});
 
-  final Patient patient;
+  final String initials;
   final double size;
 
   @override
-  Widget build(BuildContext context) {
-    final initials = Text(patient.initials);
-    return switch (patient.photo) {
-      final photo? => FAvatar(
-        size: size,
-        image: AssetImage(photo),
-        semanticsLabel: patient.name,
-        fallback: initials,
-      ),
-      null => FAvatar.raw(size: size, child: initials),
-    };
-  }
+  Widget build(BuildContext context) =>
+      FAvatar.raw(size: size, child: Text(initials));
 }
