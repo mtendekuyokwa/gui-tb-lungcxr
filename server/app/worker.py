@@ -14,10 +14,12 @@ def process_queued(pipeline, limit=None):
     storage = pathlib.Path(current_app.config["STORAGE_DIR"])
     handled = 0
     while limit is None or handled < limit:
-        prediction = Prediction.query.filter_by(state=QUEUED).order_by(Prediction.id).first()
+        prediction = Prediction.query.filter_by(
+            state=QUEUED).order_by(Prediction.id).first()
         if prediction is None:
             break
         case = db.session.get(Case, prediction.case_id)
+        assert case is not None
         try:
             reading = pipeline.read(storage / case.image_path)
             mask_path = f"masks/{case.id}.png"
@@ -31,7 +33,8 @@ def process_queued(pipeline, limit=None):
             prediction.overlay_path = overlay_path
             prediction.state = DONE
         except Exception as error:  # one bad image must not stop the queue
-            current_app.logger.warning("Prediction %s failed: %s", prediction.id, error)
+            current_app.logger.warning(
+                "Prediction %s failed: %s", prediction.id, error)
             prediction.state = FAILED
         prediction.model_version = current_app.config["MODEL_VERSION"]
         db.session.commit()
