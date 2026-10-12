@@ -41,15 +41,18 @@ class Pipeline:
 
     def __init__(self, models_dir):
         models_dir = pathlib.Path(models_dir)
-        missing = [f for f in (SEGMENTER_FILE, CLASSIFIER_FILE) if not (models_dir / f).is_file()]
+        missing = [f for f in (SEGMENTER_FILE, CLASSIFIER_FILE)
+                   if not (models_dir / f).is_file()]
         if missing:
-            raise FileNotFoundError(f"Model files missing from {models_dir}: {', '.join(missing)}")
+            raise FileNotFoundError(f"Model files missing from {
+                                    models_dir}: {', '.join(missing)}")
         self.segmenter = Segmenter(models_dir / SEGMENTER_FILE)
         self.classifier = Classifier(models_dir / CLASSIFIER_FILE)
 
     def read(self, image_path):
         gray = preprocess.load_gray(image_path)
         mask = self.segmenter.mask(gray)
+        assert mask is not None
         if mask.mean() < MIN_LUNG_FRACTION:
             raise ModelError("No lungs found in the image.")
         masked, mask_small = preprocess.classifier_arrays(gray, mask)

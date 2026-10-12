@@ -48,7 +48,8 @@ UPLOAD_FORMATS = {"PNG", "JPEG"}
 
 def _password(value):
     if not isinstance(value, str) or len(value) < MIN_PASSWORD:
-        raise ApiError(422, f"Password must be at least {MIN_PASSWORD} characters.")
+        raise ApiError(422, f"Password must be at least {
+                       MIN_PASSWORD} characters.")
     return value
 
 
@@ -163,7 +164,8 @@ def create_case():
     if patient is None:
         name = form.get("patient_name", "").strip()
         if not name:
-            raise ApiError(422, "'patient_name' is required for a new patient.")
+            raise ApiError(
+                422, "'patient_name' is required for a new patient.")
         birth_year = form.get("birth_year", "").strip()
         if birth_year and not birth_year.isdigit():
             raise ApiError(422, "'birth_year' must be a number.")
@@ -202,9 +204,11 @@ def list_cases():
         query = query.filter(Case.assigned_to == int(doctor))
     flag = request.args.get("flag")
     if flag:
-        flagged = {"model_wrong": ModelFeedback, "needs_testing": TestRequest}.get(flag)
+        flagged = {"model_wrong": ModelFeedback,
+                   "needs_testing": TestRequest}.get(flag)
         if flagged is None:
-            raise ApiError(400, "'flag' must be 'model_wrong' or 'needs_testing'.")
+            raise ApiError(
+                400, "'flag' must be 'model_wrong' or 'needs_testing'.")
         # Only the current assignee's review counts, not an earlier doctor's draft.
         query = query.filter(
             Review.query.join(flagged, flagged.review_id == Review.id)
@@ -250,7 +254,8 @@ def assign_cases():
     ):
         raise ApiError(422, "'case_ids' must be a non-empty list of case ids.")
     doctor_id = data.get("doctor_id")
-    doctor = db.session.get(User, doctor_id) if isinstance(doctor_id, int) else None
+    doctor = db.session.get(User, doctor_id) if isinstance(
+        doctor_id, int) else None
     if doctor is None or doctor.role != ROLE_DOCTOR or not doctor.active:
         raise ApiError(422, "'doctor_id' must be an active doctor.")
     due_at = _parse_due(data.get("due_at"))
@@ -259,9 +264,11 @@ def assign_cases():
     if len(cases) != len(set(case_ids)):
         raise ApiError(404, "One or more cases were not found.")
     # Checked up front so a bulk assignment is all or nothing.
-    locked = [c.id for c in cases if c.status not in (UNASSIGNED, *OPEN_STATUSES)]
+    locked = [c.id for c in cases if c.status not in (
+        UNASSIGNED, *OPEN_STATUSES)]
     if locked:
-        raise ApiError(409, f"Cases already submitted or accepted cannot be reassigned: {locked}.")
+        raise ApiError(
+            409, f"Cases already submitted or accepted cannot be reassigned: {locked}.")
 
     for case in cases:
         if case.assigned_to == doctor.id:
@@ -349,8 +356,10 @@ def export():
         for r in _submitted_reviews():
             p = r.case.prediction
             rows.append([
-                r.case_id, r.doctor_id, r.case.status, r.verdict, r.note, len(r.marks),
-                ";".join(sorted({m.finding_code for m in r.marks if m.finding_code})),
+                r.case_id, r.doctor_id, r.case.status, r.verdict, r.note, len(
+                    r.marks),
+                ";".join(
+                    sorted({m.finding_code for m in r.marks if m.finding_code})),
                 ";".join(t.disease_code for t in r.disease_tags),
                 p.label if p else None, p.tb_probability if p else None,
                 r.feedback.kind if r.feedback else None,
@@ -365,14 +374,15 @@ def export():
             "tb_probability", "feedback_kind", "derived", "feedback_note", "verdict", "marks",
         ]
         rows = []
-        for r in _submitted_reviews().join(ModelFeedback):
+        for r in _submitted_reviews().join(ModelFeedback, ModelFeedback.review_id == Review.id):
             p = r.feedback.prediction
             rows.append([
                 r.case_id, r.doctor_id, r.feedback.prediction_id,
                 p.model_version if p else None, p.label if p else None,
                 p.tb_probability if p else None, r.feedback.kind, r.feedback.derived,
                 r.feedback.note, r.verdict,
-                json.dumps([{"finding": m.finding_code, "points": m.points} for m in r.marks]),
+                json.dumps([{"finding": m.finding_code, "points": m.points}
+                           for m in r.marks]),
             ])
         return _csv_response("model_feedback", header, rows)
     raise ApiError(400, "'kind' must be 'reviews' or 'model_feedback'.")
@@ -381,7 +391,8 @@ def export():
 @bp.get("/stats")
 @login_required(ROLE_ADMIN)
 def stats():
-    counts = dict(db.session.query(Case.status, func.count()).group_by(Case.status).all())
+    counts = dict(db.session.query(
+        Case.status, func.count()).group_by(Case.status).all())
     by_status = {status: counts.get(status, 0) for status in CASE_STATUSES}
 
     workload = {}
@@ -391,10 +402,12 @@ def stats():
         .group_by(Case.assigned_to, Case.status)
     )
     for doctor_id, status, count in rows:
-        entry = workload.setdefault(doctor_id, {"open": 0, "submitted": 0, "accepted": 0})
+        entry = workload.setdefault(
+            doctor_id, {"open": 0, "submitted": 0, "accepted": 0})
         entry["open" if status in OPEN_STATUSES else status] += count
     doctors = [
-        {"doctor": u.to_dict(), **workload.get(u.id, {"open": 0, "submitted": 0, "accepted": 0})}
+        {"doctor": u.to_dict(), **workload.get(u.id,
+                                               {"open": 0, "submitted": 0, "accepted": 0})}
         for u in User.query.filter_by(role=ROLE_DOCTOR).order_by(User.full_name)
     ]
 
@@ -406,8 +419,10 @@ def stats():
             continue
         if review.verdict not in ("tb_suspected", "no_tb"):
             continue
+        prediction_is_tb = prediction.label == "tb"
+        verdict_is_tb = review.verdict == "tb_suspected"
         compared += 1
-        agreed += (prediction.label == "tb") == (review.verdict == "tb_suspected")
+        agreed += int(prediction_is_tb == verdict_is_tb)
     return jsonify(
         by_status=by_status,
         doctors=doctors,

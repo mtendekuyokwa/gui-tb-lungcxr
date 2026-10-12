@@ -105,7 +105,8 @@ def _text(value, field, limit=4000):
     if value is None:
         return ""
     if not isinstance(value, str) or len(value) > limit:
-        raise ApiError(422, f"'{field}' must be text of at most {limit} characters.")
+        raise ApiError(422, f"'{field}' must be text of at most {
+                       limit} characters.")
     return value.strip()
 
 
@@ -137,7 +138,8 @@ def _parse_marks(raw):
                 and all(0 <= v <= 1 for v in point)
             )
             if not ok:
-                raise ApiError(422, "Mark points must be [x, y] pairs between 0 and 1.")
+                raise ApiError(
+                    422, "Mark points must be [x, y] pairs between 0 and 1.")
             clean.append([float(point[0]), float(point[1])])
         marks.append(Mark(points=clean, finding_code=finding))
     return marks
@@ -151,10 +153,12 @@ def _parse_disease_tags(raw):
         if isinstance(item, str):
             item = {"code": item}
         if not isinstance(item, dict):
-            raise ApiError(422, "Each disease tag must be a code or an object.")
+            raise ApiError(
+                422, "Each disease tag must be a code or an object.")
         tags.append(
             DiseaseTag(
-                disease_code=_code(item.get("code"), catalog.DISEASES, "disease"),
+                disease_code=_code(
+                    item.get("code"), catalog.DISEASES, "disease"),
                 free_text=_text(item.get("free_text"), "free_text", 255),
             )
         )
@@ -168,11 +172,14 @@ def _parse_tests(raw):
         raise ApiError(422, "'further_testing' must be an object or null.")
     tests = raw.get("tests")
     if not isinstance(tests, list) or not tests:
-        raise ApiError(422, "'further_testing.tests' must list at least one test.")
-    urgency = _code(raw.get("urgency", "routine"), catalog.URGENCIES, "urgency")
+        raise ApiError(
+            422, "'further_testing.tests' must list at least one test.")
+    urgency = _code(raw.get("urgency", "routine"),
+                    catalog.URGENCIES, "urgency")
     free_text = _text(raw.get("free_text"), "free_text", 255)
     return [
-        TestRequest(test_code=_code(t, catalog.TESTS, "test"), urgency=urgency, free_text=free_text)
+        TestRequest(test_code=_code(t, catalog.TESTS, "test"),
+                    urgency=urgency, free_text=free_text)
         for t in dict.fromkeys(tests)
     ]
 
@@ -211,7 +218,7 @@ def _derive_feedback(review, prediction):
     feedback.kind = kind
     feedback.note = ""
     feedback.derived = True
-    feedback.prediction_id = prediction.id
+    feedback.prediction_id = prediction.id if prediction else None
     review.feedback = feedback
 
 
@@ -260,7 +267,8 @@ def submit_review(case_id):
     if review is None or review.verdict is None:
         raise ApiError(422, "A verdict is required before submitting.")
     if review.verdict == "other_disease" and not review.disease_tags:
-        raise ApiError(422, "Tag at least one disease for 'Other disease suspected'.")
+        raise ApiError(
+            422, "Tag at least one disease for 'Other disease suspected'.")
 
     _derive_feedback(review, case.prediction)
     review.state = SUBMITTED
