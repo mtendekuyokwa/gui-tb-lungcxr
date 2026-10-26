@@ -1,5 +1,6 @@
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 import 'package:gui_lungcxr/feature_home/models/mark.dart';
+import 'package:gui_lungcxr/feature_home/models/mask_edit.dart';
 
 /// The whole review as the doctor has it now, in the shape the backend's
 /// `PUT /cases/{id}/review` expects.
@@ -8,6 +9,7 @@ class ReviewDraft {
     required this.verdict,
     required this.note,
     required this.marks,
+    required this.maskEdits,
     required this.diseases,
     required this.feedbackKind,
     required this.feedbackNote,
@@ -18,6 +20,7 @@ class ReviewDraft {
   final String? verdict;
   final String note;
   final List<Mark> marks;
+  final List<MaskEdit> maskEdits;
   final List<String> diseases;
 
   /// Null when the doctor did not flag the model as wrong.
@@ -32,6 +35,7 @@ class ReviewDraft {
     'verdict': verdict,
     'note': note,
     'marks': [for (final mark in marks) markToJson(mark)],
+    'mask_edits': [for (final edit in maskEdits) maskEditToJson(edit)],
     'disease_tags': diseases,
     'model_feedback': feedbackKind == null
         ? null

@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/models/lesion.dart';
 import 'package:gui_lungcxr/feature_home/models/mark.dart';
+import 'package:gui_lungcxr/feature_home/models/mask_edit.dart';
 
 /// Where a case is in the admin → doctor → admin workflow.
 enum CaseStatus {
@@ -38,6 +39,7 @@ class Prediction {
     this.label,
     this.tbProbability,
     this.hasOverlay = false,
+    this.hasMask = false,
   });
 
   /// `queued`, `done` or `failed`.
@@ -47,6 +49,7 @@ class Prediction {
   final String? label;
   final double? tbProbability;
   final bool hasOverlay;
+  final bool hasMask;
 
   bool get done => state == 'done';
 
@@ -55,6 +58,7 @@ class Prediction {
     label: json['label'] as String?,
     tbProbability: (json['tb_probability'] as num?)?.toDouble(),
     hasOverlay: json['has_overlay'] as bool? ?? false,
+    hasMask: json['has_mask'] as bool? ?? false,
   );
 }
 
@@ -65,6 +69,7 @@ class Review {
     this.verdict,
     this.note = '',
     this.marks = const [],
+    this.maskEdits = const [],
     this.diseases = const [],
     this.feedbackKind,
     this.feedbackNote = '',
@@ -78,6 +83,7 @@ class Review {
   final String? verdict;
   final String note;
   final List<Mark> marks;
+  final List<MaskEdit> maskEdits;
   final List<String> diseases;
   final String? feedbackKind;
   final String feedbackNote;
@@ -97,6 +103,10 @@ class Review {
       verdict: json['verdict'] as String?,
       note: json['note'] as String? ?? '',
       marks: [for (final mark in json['marks'] as List) markFromJson(mark)],
+      maskEdits: [
+        for (final edit in json['mask_edits'] as List? ?? const [])
+          maskEditFromJson(edit),
+      ],
       diseases: [
         for (final tag in json['disease_tags'] as List) tag['code'] as String,
       ],
@@ -115,13 +125,14 @@ Mark markFromJson(dynamic json) {
   final mark = Mark([
     for (final point in json['points'] as List)
       Offset((point[0] as num).toDouble(), (point[1] as num).toDouble()),
-  ]);
+  ], note: json['note'] as String? ?? '');
   mark.lesion = LesionType.values.asNameMap()[json['finding']];
   return mark;
 }
 
 Map<String, dynamic> markToJson(Mark mark) => {
   'finding': mark.lesion?.name,
+  'note': mark.note,
   'points': [
     for (final point in mark.points) [point.dx, point.dy],
   ],

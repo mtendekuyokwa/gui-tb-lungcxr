@@ -7,8 +7,8 @@ import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
 import 'package:gui_lungcxr/feature_home/utils/mark_style.dart';
 import 'package:gui_lungcxr/feature_home/widgets/color_swatch.dart';
 
-/// Floating card for labelling the active mark: pick a category, then the
-/// lesion type within it.
+/// Floating card for describing the active mark: write a comment, pick a
+/// category, then the lesion type within it. Nothing is stored until Save.
 class LesionLabelPanel extends StatefulWidget {
   const new({required this.editor, super.key});
 
@@ -22,6 +22,15 @@ class _LesionLabelPanelState extends State<LesionLabelPanel> {
   late final int _index = widget.editor.activeMark!;
   late LesionType? _current = widget.editor.marks[_index].lesion;
   late LesionCategory _category = _current?.category ?? .parenchymal;
+  late final _note = TextEditingController(
+    text: widget.editor.marks[_index].note,
+  );
+
+  @override
+  void dispose() {
+    _note.dispose();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -42,76 +51,94 @@ class _LesionLabelPanelState extends State<LesionLabelPanel> {
             AppSizes.gap8,
             AppSizes.gap16,
           ),
-          child: Column(
-            crossAxisAlignment: .stretch,
-            spacing: AppSizes.gap8,
-            children: [
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      _current == null ? Strings.labelMark : Strings.editLabel,
-                      style: heading,
-                    ),
-                  ),
-                  FTooltip(
-                    tipBuilder: (_, _) => const Text(Strings.deleteMark),
-                    child: FButton.icon(
-                      variant: .ghost,
-                      size: .sm,
-                      onPress: () => editor.deleteMark(_index),
-                      child: const Icon(FLucideIcons.trash2),
-                    ),
-                  ),
-                  FTooltip(
-                    tipBuilder: (_, _) => const Text(Strings.close),
-                    child: FButton.icon(
-                      variant: .ghost,
-                      size: .sm,
-                      onPress: () => editor.selectMark(null),
-                      child: const Icon(FLucideIcons.x),
-                    ),
-                  ),
-                ],
-              ),
-              Text(Strings.lesionCategory, style: caption),
-              Wrap(
-                spacing: AppSizes.gap6,
-                runSpacing: AppSizes.gap6,
-                children: [
-                  for (final category in LesionCategory.values)
-                    FButton(
-                      variant: category == _category ? .primary : .outline,
-                      size: .xs,
-                      mainAxisSize: .min,
-                      onPress: () => setState(() => _category = category),
-                      prefix: ColorSwatchDot(
-                        color: markColor(category.types.first),
+          // The card floats over the canvas; on short screens the
+          // comment, categories, findings and save button scroll.
+          child: SingleChildScrollView(
+            child: Column(
+              crossAxisAlignment: .stretch,
+              spacing: AppSizes.gap8,
+              children: [
+                Row(
+                  children: [
+                    Expanded(
+                      child: Text(
+                        _current == null
+                            ? Strings.labelMark
+                            : Strings.editLabel,
+                        style: heading,
                       ),
-                      child: Text(category.label),
                     ),
-                ],
-              ),
-              const SizedBox(height: AppSizes.gap2),
-              Text(Strings.lesionType, style: caption),
-              Wrap(
-                spacing: AppSizes.gap6,
-                runSpacing: AppSizes.gap6,
-                children: [
-                  for (final type in _category.types)
-                    FButton(
-                      variant: type == _current ? .primary : .secondary,
-                      size: .xs,
-                      mainAxisSize: .min,
-                      onPress: () {
-                        setState(() => _current = type);
-                        editor.labelActiveMark(type);
-                      },
-                      child: Text(type.label),
+                    FTooltip(
+                      tipBuilder: (_, _) => const Text(Strings.deleteMark),
+                      child: FButton.icon(
+                        variant: .ghost,
+                        size: .sm,
+                        onPress: () => editor.deleteMark(_index),
+                        child: const Icon(FLucideIcons.trash2),
+                      ),
                     ),
-                ],
-              ),
-            ],
+                    FTooltip(
+                      tipBuilder: (_, _) => const Text(Strings.close),
+                      child: FButton.icon(
+                        variant: .ghost,
+                        size: .sm,
+                        onPress: () => editor.selectMark(null),
+                        child: const Icon(FLucideIcons.x),
+                      ),
+                    ),
+                  ],
+                ),
+                Text(Strings.markNote, style: caption),
+                FTextField.multiline(
+                  control: .managed(controller: _note),
+                  hint: Strings.markNoteHint,
+                  minLines: 2,
+                  maxLines: 3,
+                ),
+                Text(Strings.lesionCategory, style: caption),
+                Wrap(
+                  spacing: AppSizes.gap6,
+                  runSpacing: AppSizes.gap6,
+                  children: [
+                    for (final category in LesionCategory.values)
+                      FButton(
+                        variant: category == _category ? .primary : .outline,
+                        size: .xs,
+                        mainAxisSize: .min,
+                        onPress: () => setState(() => _category = category),
+                        prefix: ColorSwatchDot(
+                          color: markColor(category.types.first),
+                        ),
+                        child: Text(category.label),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: AppSizes.gap2),
+                Text(Strings.lesionType, style: caption),
+                Wrap(
+                  spacing: AppSizes.gap6,
+                  runSpacing: AppSizes.gap6,
+                  children: [
+                    for (final type in _category.types)
+                      FButton(
+                        variant: type == _current ? .primary : .secondary,
+                        size: .xs,
+                        mainAxisSize: .min,
+                        onPress: () => setState(() => _current = type),
+                        child: Text(type.label),
+                      ),
+                  ],
+                ),
+                FButton(
+                  onPress: () => editor.updateActiveMark(
+                    lesion: _current,
+                    note: _note.text,
+                  ),
+                  prefix: const Icon(FLucideIcons.check),
+                  child: const Text(Strings.saveMark),
+                ),
+              ],
+            ),
           ),
         ),
       ),

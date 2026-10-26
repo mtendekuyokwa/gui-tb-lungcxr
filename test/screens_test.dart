@@ -3,10 +3,14 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:forui/forui.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_admin/state/admin_state.dart';
+import 'package:gui_lungcxr/feature_admin/widgets/assign_card.dart';
 import 'package:gui_lungcxr/feature_auth/state/session_state.dart';
+import 'package:gui_lungcxr/feature_home/widgets/client_board.dart';
+import 'package:gui_lungcxr/feature_home/widgets/segment_panel.dart';
 import 'package:gui_lungcxr/main.dart';
 import 'package:gui_lungcxr/theme/theme.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/fake_backend.dart';
 
@@ -40,6 +44,8 @@ Future<void> _settle(WidgetTester tester) async {
 }
 
 void main() {
+  setUp(() => SharedPreferences.setMockInitialValues({}));
+
   testWidgets('signed out shows the login form', (tester) async {
     final session = SessionState(api: FakeBackend().api);
     addTearDown(session.dispose);
@@ -77,6 +83,93 @@ void main() {
     },
   );
 
+  testWidgets('segment tool opens the mask correction panel', (tester) async {
+    final backend = FakeBackend();
+    final session = SessionState(api: backend.api);
+    addTearDown(session.dispose);
+    await tester.runAsync(() => session.login('doc@test', 'secret'));
+    await _pumpApp(tester, session);
+    await _settle(tester);
+
+    await tester.tap(find.byIcon(FLucideIcons.spline));
+    await tester.pump();
+    final panel = find.byType(SegmentPanel);
+    expect(panel, findsOneWidget);
+    expect(
+      find.descendant(of: panel, matching: find.byIcon(FLucideIcons.brush)),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: panel, matching: find.byIcon(FLucideIcons.eraser)),
+      findsOneWidget,
+    );
+    expect(find.text(Strings.resetSegmentEdits), findsOneWidget);
+
+    // Each subtool carries its own default width.
+    await tester.tap(
+      find.descendant(of: panel, matching: find.byIcon(FLucideIcons.pen)),
+    );
+    await tester.pump();
+    expect(find.text('1%'), findsOneWidget);
+
+    // The footer gains a second switch for the mask overlay.
+    expect(
+      find.byWidgetPredicate(
+        (w) => w is FSwitch && w.semanticsLabel == Strings.Segmentation,
+      ),
+      findsOneWidget,
+    );
+
+    // The panel closes back to pan without hiding the overlay.
+    await tester.tap(find.byIcon(FLucideIcons.x));
+    await tester.pump();
+    expect(find.byType(SegmentPanel), findsNothing);
+    expect(
+      find.byWidgetPredicate(
+        (w) =>
+            w is FSwitch && w.semanticsLabel == Strings.Segmentation && w.value,
+      ),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10)); // let toasts expire
+  });
+
+  testWidgets('a doctor can search the client list', (tester) async {
+    final backend = FakeBackend();
+    final session = SessionState(api: backend.api);
+    addTearDown(session.dispose);
+    await tester.runAsync(() => session.login('doc@test', 'secret'));
+    await _pumpApp(tester, session);
+    await _settle(tester);
+
+    final board = find.byType(ClientBoard);
+    expect(
+      find.descendant(of: board, matching: find.text('Jane Banda')),
+      findsOneWidget,
+    );
+    expect(
+      find.descendant(of: board, matching: find.text('John Phiri')),
+      findsOneWidget,
+    );
+    await tester.enterText(
+      find.descendant(
+        of: find.byType(ClientBoard),
+        matching: find.byType(FTextField),
+      ),
+      'john',
+    );
+    await tester.pump();
+    expect(
+      find.descendant(of: board, matching: find.text('Jane Banda')),
+      findsNothing,
+    );
+    expect(
+      find.descendant(of: board, matching: find.text('John Phiri')),
+      findsOneWidget,
+    );
+    await tester.pump(const Duration(seconds: 10));
+  });
+
   testWidgets('an admin sees all cases and can assign ticked ones', (
     tester,
   ) async {
@@ -98,12 +191,33 @@ void main() {
     await tester.tap(find.byIcon(FLucideIcons.square).first);
     await tester.pump();
     expect(admin.ticked, {1});
-    await tester.tap(find.text('Doc One').last);
+    // Scoped to the assign card: the doctors card lists the same name.
+    await tester.tap(
+      find.descendant(
+        of: find.byType(AssignCard),
+        matching: find.text('Doc One'),
+      ),
+    );
     await tester.pump();
     await tester.tap(find.text('${Strings.assign} (1)'));
     await _settle(tester);
     expect(backend.log, contains('POST /admin/cases/assign'));
     expect(admin.ticked, isEmpty);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('an admin sees the worker hint while readings are queued', (
+    tester,
+  ) async {
+    final backend = FakeBackend(role: 'admin');
+    backend.cases[1] = caseJson(1, predictionState: 'queued');
+    final session = SessionState(api: backend.api);
+    addTearDown(session.dispose);
+    await tester.runAsync(() => session.login('admin@test', 'secret'));
+    await _pumpApp(tester, session);
+    await _settle(tester);
+
+    expect(find.text(Strings.waitingOnModel), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
   });
 }

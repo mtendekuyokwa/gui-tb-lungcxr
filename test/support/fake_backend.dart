@@ -30,6 +30,7 @@ Map<String, dynamic> caseJson(
   String status = 'assigned',
   Map<String, dynamic>? review,
   String name = 'Jane Banda',
+  String predictionState = 'done',
 }) => {
   'id': id,
   'status': status,
@@ -43,10 +44,11 @@ Map<String, dynamic> caseJson(
   },
   'prediction': {
     'id': id,
-    'state': 'done',
+    'state': predictionState,
     'label': 'tb',
     'tb_probability': 0.97,
     'has_overlay': false,
+    'has_mask': true,
   },
   'review': review,
   'return_note': null,
@@ -72,6 +74,20 @@ class FakeBackend {
   final List<Map<String, dynamic>> saved = [];
   bool failSaves = false;
 
+  /// In-memory users table, so user CRUD can be tested.
+  final Map<int, Map<String, dynamic>> users = {
+    2: {
+      'id': 2,
+      'email': 'doc@test',
+      'full_name': 'Doc One',
+      'role': 'doctor',
+      'active': true,
+    },
+  };
+
+  /// Body of the last assign call, so tests can assert the due date.
+  Map<String, dynamic>? lastAssign;
+
   late final ApiClient api = ApiClient(
     baseUrl: 'http://test',
     client: MockClient(_handle),
@@ -86,7 +102,12 @@ class FakeBackend {
   Future<http.Response> _handle(http.Request request) async {
     final path = request.url.path;
     final method = request.method;
-    log.add('$method $path');
+    // Keep the query so tests can assert which filter was requested.
+    log.add(
+      request.url.query.isEmpty
+          ? '$method $path'
+          : '$method $path?${request.url.query}',
+    );
 
     if (path == '/auth/login') {
       final body = jsonDecode(request.body);
@@ -107,26 +128,94 @@ class FakeBackend {
     if (request.headers['Authorization'] != 'Bearer token-1') {
       return _json({'error': 'Missing bearer token.'}, 401);
     }
+    if (path == '/auth/me') {
+      return _json({
+        'id': role == 'admin' ? 1 : 2,
+        'email': role == 'admin' ? 'admin@test' : 'doc@test',
+        'full_name': role == 'admin' ? 'Admin' : 'Doc One',
+        'role': role,
+        'active': true,
+      });
+    }
     if (path == '/catalog') return _json(_catalog);
-    if (path == '/cases' || path == '/admin/cases') {
-      return _json(cases.values.toList());
+    if (path == '/cases') return _json(cases.values.toList());
+    if (path == '/admin/stats') {
+      return _json({
+        'by_status': {'assigned': cases.length},
+        'doctors': [
+          {
+            'doctor': {
+              'id': 2,
+              'email': 'doc@test',
+              'full_name': 'Doc One',
+              'role': 'doctor',
+              'active': true,
+            },
+            'open': cases.length,
+            'submitted': 0,
+            'accepted': 0,
+          },
+        ],
+        'model_agreement': {'compared': 0, 'agreed': 0, 'rate': null},
+      });
+    }
+    if (path == '/admin/export') {
+      final kind = request.url.queryParameters['kind'] ?? 'reviews';
+      return http.Response(
+        kind == 'model_feedback'
+            ? 'case_id,doctor_id,feedback_kind\n1,2,false_negative\n'
+            : 'case_id,doctor_id,verdict\n1,2,tb_suspected\n',
+        200,
+        headers: {'content-type': 'text/csv'},
+      );
+    }
+    if (path == '/admin/cases') {
+      final status = request.url.queryParameters['status'];
+      final doctor = request.url.queryParameters['doctor'];
+      final flag = request.url.queryParameters['flag'];
+      return _json([
+        for (final c in cases.values)
+          if ((status == null || c['status'] == status) &&
+              (doctor == null ||
+                  (c['assigned_to'] as Map)['id'].toString() == doctor) &&
+              (flag == null ||
+                  (flag == 'model_wrong' && c['model_wrong'] == true) ||
+                  (flag == 'needs_testing' && c['needs_testing'] == true)))
+            c,
+      ]);
+    }
+    if (path == '/admin/users' && method == 'POST') {
+      final body = jsonDecode(request.body);
+      users[3] = {
+        'id': 3,
+        'email': body['email'],
+        'full_name': body['full_name'],
+        'role': body['role'],
+        'active': true,
+      };
+      return _json(users[3]!, 201);
     }
     if (path == '/admin/users') {
-      return _json([
-        {
-          'id': 2,
-          'email': 'doc@test',
-          'full_name': 'Doc One',
-          'role': 'doctor',
-          'active': true,
-        },
-      ]);
+      return _json(users.values.toList());
+    }
+    final userMatch = RegExp(r'^/admin/users/(\d+)$').firstMatch(path);
+    if (userMatch != null) {
+      if (method != 'PATCH') return _json({'error': 'Not found.'}, 404);
+      final user = users[int.parse(userMatch.group(1)!)];
+      if (user == null) return _json({'error': 'User not found.'}, 404);
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      if (body.containsKey('active')) user['active'] = body['active'];
+      if (body.containsKey('full_name')) {
+        user['full_name'] = body['full_name'];
+      }
+      return _json(user);
     }
     if (path == '/admin/cases/assign') {
       final body = jsonDecode(request.body);
       for (final id in body['case_ids'] as List) {
         cases[id]!['status'] = 'assigned';
       }
+      lastAssign = body as Map<String, dynamic>;
       return _json([]);
     }
 
@@ -150,6 +239,7 @@ class FakeBackend {
           'verdict': body['verdict'],
           'note': body['note'],
           'marks': body['marks'],
+          'mask_edits': body['mask_edits'] ?? [],
           'disease_tags': [
             for (final code in body['disease_tags'] as List) {'code': code},
           ],

@@ -12,6 +12,30 @@ SERVER_DIR = pathlib.Path(__file__).resolve().parent.parent
 DEV_SECRET = "dev-only-secret-change-me-before-deploying"
 
 
+def _ensure_schema():
+    """Adds columns that older development databases lack.
+
+    There are no schema migrations (tables come from ``create_all()``), so a
+    fresh checkout recreates its database while a working one is altered in
+    place. Missing tables (before ``init-db``) are left alone.
+    """
+    from sqlalchemy import inspect, text
+    from sqlalchemy.exc import NoSuchTableError
+
+    try:
+        columns = [c["name"] for c in inspect(db.engine).get_columns("marks")]
+    except NoSuchTableError:
+        return
+    if "note" not in columns:
+        if db.engine.dialect.name == "postgresql":
+            db.session.execute(
+                text("ALTER TABLE marks ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''"))
+        else:
+            db.session.execute(
+                text("ALTER TABLE marks ADD COLUMN note TEXT DEFAULT ''"))
+        db.session.commit()
+
+
 def create_app(config=None):
     app = Flask(__name__, instance_path=str(SERVER_DIR / "instance"))
     app.config.update(
@@ -38,11 +62,17 @@ def create_app(config=None):
     db.init_app(app)
     CORS(app, resources={r"/api/*": {"origins": app.config["CORS_ORIGINS"]}})
 
-    from . import admin, auth, cases, cli
+    with app.app_context():
+        _ensure_schema()
+
+    from . import admin, auth, cases, cli, docs
 
     app.register_blueprint(auth.bp, url_prefix="/api/v1")
     app.register_blueprint(cases.bp, url_prefix="/api/v1")
     app.register_blueprint(admin.bp, url_prefix="/api/v1/admin")
+    # Docs last: its flask-restx Resources only describe the routes above.
+    # Registered earlier they would shadow the real views.
+    app.register_blueprint(docs.bp, url_prefix="/api/v1")
     cli.register(app)
 
     @app.errorhandler(ApiError)

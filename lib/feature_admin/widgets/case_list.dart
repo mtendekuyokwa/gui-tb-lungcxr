@@ -9,7 +9,7 @@ import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 import 'package:gui_lungcxr/feature_home/widgets/choice_chips.dart';
 import 'package:provider/provider.dart';
 
-/// The status filter over every case the admin can see.
+/// The filters over every case the admin can see: status, doctor and flag.
 class CaseList extends StatelessWidget {
   const new({super.key});
 
@@ -37,6 +37,47 @@ class CaseList extends StatelessWidget {
               code == _all ? null : CaseStatus.fromCode(code),
             ),
           ),
+          ChoiceChips(
+            options: [
+              const Option(_all, Strings.all),
+              for (final doctor in admin.doctors)
+                Option('${doctor.id}', doctor.fullName),
+            ],
+            selected: {
+              admin.doctorFilter == null ? _all : '${admin.doctorFilter}',
+            },
+            onTap: (code) => admin.setDoctorFilter(
+              code == _all ? null : int.parse(code),
+            ),
+            enabled: !admin.busy,
+          ),
+          ChoiceChips(
+            options: const [
+              Option(_all, Strings.flagAll),
+              Option(
+                'model_wrong',
+                Strings.flagModelWrongShort,
+              ),
+              Option(
+                'needs_testing',
+                Strings.flagNeedsTestingShort,
+              ),
+            ],
+            selected: {admin.flagFilter?.code ?? _all},
+            onTap: (code) => admin.setFlagFilter(
+              code == _all
+                  ? null
+                  : CaseFlag.values.firstWhere((f) => f.code == code),
+            ),
+            enabled: !admin.busy,
+          ),
+          if (admin.waitingOnModel)
+            Text(
+              Strings.waitingOnModel,
+              style: theme.typography.body.xs.copyWith(
+                color: theme.colors.mutedForeground,
+              ),
+            ),
           Expanded(
             child: admin.cases.isEmpty
                 ? Center(

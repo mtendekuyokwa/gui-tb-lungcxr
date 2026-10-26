@@ -49,6 +49,13 @@ class CaseDetailCard extends StatelessWidget {
             DetailLine(Strings.diseases, diseasesSummary(review, catalog)),
           if (review.note.isNotEmpty) DetailLine(Strings.notes, review.note),
           DetailLine(Strings.marks, marksSummary(review)),
+          for (final (i, mark) in review.marks.indexed)
+            if (mark.note.isNotEmpty)
+              DetailLine(
+                '${Strings.marks} ${i + 1} · ${mark.lesion?.label ?? Strings.unlabelled}',
+                mark.note,
+              ),
+          DetailLine(Strings.maskEdits, maskEditsSummary(review)),
           if (review.feedbackKind != null)
             DetailLine(
               Strings.flagModelWrong,

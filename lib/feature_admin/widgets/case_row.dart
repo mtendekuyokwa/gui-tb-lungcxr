@@ -22,37 +22,38 @@ class CaseRow extends StatelessWidget {
     final ticked = admin.ticked.contains(item.id);
     final isOpen = admin.open?.id == item.id;
 
-    return MouseRegion(
-      cursor: SystemMouseCursors.click,
-      child: GestureDetector(
-        behavior: .opaque,
-        onTap: () => admin.openCase(item.id),
-        child: DecoratedBox(
-          decoration: BoxDecoration(
-            color: isOpen ? theme.colors.secondary : theme.colors.background,
-            border: .all(color: theme.colors.border),
-            borderRadius: .circular(AppSizes.radius8),
-          ),
-          child: Padding(
-            padding: const .symmetric(
-              horizontal: AppSizes.gap8,
-              vertical: AppSizes.gap6,
+    return DecoratedBox(
+      decoration: BoxDecoration(
+        color: isOpen ? theme.colors.secondary : theme.colors.background,
+        border: .all(color: theme.colors.border),
+        borderRadius: .circular(AppSizes.radius8),
+      ),
+      child: Padding(
+        padding: const .symmetric(
+          horizontal: AppSizes.gap8,
+          vertical: AppSizes.gap6,
+        ),
+        child: Row(
+          spacing: AppSizes.gap10,
+          children: [
+            FButton.icon(
+              variant: .ghost,
+              size: .sm,
+              // Submitted and accepted cases cannot be reassigned.
+              onPress: item.status.assignable
+                  ? () => admin.toggleTicked(item.id)
+                  : null,
+              child: Icon(
+                ticked ? FLucideIcons.squareCheck : FLucideIcons.square,
+              ),
             ),
-            child: Row(
-              spacing: AppSizes.gap10,
-              children: [
-                FButton.icon(
-                  variant: .ghost,
-                  size: .sm,
-                  // Submitted and accepted cases cannot be reassigned.
-                  onPress: item.status.assignable
-                      ? () => admin.toggleTicked(item.id)
-                      : null,
-                  child: Icon(
-                    ticked ? FLucideIcons.squareCheck : FLucideIcons.square,
-                  ),
-                ),
-                Expanded(
+            // Only the case itself opens the detail: ticking must not.
+            Expanded(
+              child: MouseRegion(
+                cursor: SystemMouseCursors.click,
+                child: GestureDetector(
+                  behavior: .opaque,
+                  onTap: () => admin.openCase(item.id),
                   child: Column(
                     crossAxisAlignment: .start,
                     spacing: AppSizes.gap2,
@@ -74,31 +75,28 @@ class CaseRow extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (item.modelWrong)
-                  const FTooltip(
-                    tipBuilder: _modelWrongTip,
-                    child: Icon(FLucideIcons.bot, size: AppSizes.icon16),
-                  ),
-                if (item.needsTesting)
-                  const FTooltip(
-                    tipBuilder: _needsTestingTip,
-                    child: Icon(
-                      FLucideIcons.flaskConical,
-                      size: AppSizes.icon16,
-                    ),
-                  ),
-                FBadge(
-                  variant: switch (item.status) {
-                    .submitted => .primary,
-                    .returned => .destructive,
-                    .accepted => .secondary,
-                    _ => .outline,
-                  },
-                  child: Text(item.status.label),
-                ),
-              ],
+              ),
             ),
-          ),
+            if (item.modelWrong)
+              const FTooltip(
+                tipBuilder: _modelWrongTip,
+                child: Icon(FLucideIcons.bot, size: AppSizes.icon16),
+              ),
+            if (item.needsTesting)
+              const FTooltip(
+                tipBuilder: _needsTestingTip,
+                child: Icon(FLucideIcons.flaskConical, size: AppSizes.icon16),
+              ),
+            FBadge(
+              variant: switch (item.status) {
+                .submitted => .primary,
+                .returned => .destructive,
+                .accepted => .secondary,
+                _ => .outline,
+              },
+              child: Text(item.status.label),
+            ),
+          ],
         ),
       ),
     );

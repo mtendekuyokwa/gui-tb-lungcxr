@@ -63,9 +63,25 @@ class AppSizes {
   /// How much thicker the mark being labelled is drawn.
   static const double activeMarkStrokeScale = 1.8;
 
+  // Lung segmentation mask.
+  /// Fill opacity of the mask wash over the X-ray.
+  static const double maskFillOpacity = 0.3;
+
+  /// Correction stroke width, as a fraction of the image width.
+  static const double maskEditMinWidth = 0.004;
+  static const double maskEditMaxWidth = 0.08;
+  static const double maskBrushDefaultWidth = 0.03;
+  static const double maskPenDefaultWidth = 0.01;
+
   // Admin workspace
   /// Width of the upload / assign / case detail column.
   static const double adminPanelWidth = 380;
+
+  /// Below this width the workspaces switch to a single-column tab layout.
+  static const double narrowBreakpoint = 700;
+
+  /// Width of the activate / deactivate button in the doctors card.
+  static const double userActiveButtonWidth = 110;
 
   /// Height of the X-ray preview in the case detail card.
   static const double casePreviewHeight = 200;

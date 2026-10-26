@@ -29,7 +29,9 @@ class CaseApi {
 
   String imageUrl(int id) => _client.url(Endpoints.caseImage(id));
   String overlayUrl(int id) => _client.url(Endpoints.caseOverlay(id));
+  String maskUrl(int id) => _client.url(Endpoints.caseMask(id));
 
-  /// Headers the image widgets need to load [imageUrl] and [overlayUrl].
+  /// Headers the image widgets need to load [imageUrl], [overlayUrl] and
+  /// [maskUrl].
   Map<String, String> get imageHeaders => _client.authHeaders;
 }

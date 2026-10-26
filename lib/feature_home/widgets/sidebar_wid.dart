@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
 import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
+import 'package:gui_lungcxr/feature_home/state/case_state.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
 import 'package:gui_lungcxr/widgets/app_brand.dart';
 import 'package:provider/provider.dart';
@@ -13,6 +14,9 @@ class SidebarWid extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final editor = context.watch<ImageEditorState>();
+    final hasMask = context.select<CaseState, bool>(
+      (s) => s.selected?.prediction?.hasMask ?? false,
+    );
 
     FSidebarItem toolItem(EditorTool tool, IconData icon, String label) =>
         FSidebarItem(
@@ -50,13 +54,17 @@ class SidebarWid extends StatelessWidget {
             FSidebarItem(
               icon: const Icon(FLucideIcons.spline),
               label: const Text(Strings.Segmentation),
-              // Segmentation lives on the backend; not wired up yet.
-              onPress: () => showFToast(
-                context: context,
-                icon: const Icon(FLucideIcons.spline),
-                title: const Text(Strings.segmentationComingSoon),
-                description: const Text(Strings.segmentationComingSoonDetail),
-              ),
+              selected: editor.tool == .segment,
+              // The mask lives on the backend; without one there is
+              // nothing to correct yet.
+              onPress: hasMask
+                  ? () => editor.selectTool(.segment)
+                  : () => showFToast(
+                      context: context,
+                      icon: const Icon(FLucideIcons.spline),
+                      title: const Text(Strings.segAwaitingModel),
+                      description: const Text(Strings.segUnavailable),
+                    ),
             ),
           ],
         ),

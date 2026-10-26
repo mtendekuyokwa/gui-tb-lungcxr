@@ -24,7 +24,7 @@ class MarkTag extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final color = markColor(mark.lesion);
-    return MouseRegion(
+    final tag = MouseRegion(
       cursor: SystemMouseCursors.click,
       child: GestureDetector(
         onTap: onTap,
@@ -50,5 +50,8 @@ class MarkTag extends StatelessWidget {
         ),
       ),
     );
+    // The doctor's comment on hover; tags without one show as before.
+    if (mark.note.isEmpty) return tag;
+    return FTooltip(tipBuilder: (_, _) => Text(mark.note), child: tag);
   }
 }

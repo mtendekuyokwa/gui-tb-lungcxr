@@ -28,36 +28,54 @@ class AdminHeader extends StatelessWidget {
           horizontal: AppSizes.gap16,
           vertical: AppSizes.gap10,
         ),
-        child: Row(
-          spacing: AppSizes.gap8,
-          children: [
-            const AppBrand(),
-            const Spacer(),
-            Text(
-              session.user?.fullName ?? '',
-              style: theme.typography.body.xs.copyWith(
-                color: theme.colors.mutedForeground,
-              ),
-            ),
-            FTooltip(
-              tipBuilder: (_, _) => const Text(Strings.refresh),
-              child: FButton.icon(
-                variant: .ghost,
-                size: .sm,
-                onPress: admin.load,
-                child: const Icon(FLucideIcons.refreshCw),
-              ),
-            ),
-            FTooltip(
-              tipBuilder: (_, _) => const Text(Strings.signOut),
-              child: FButton.icon(
-                variant: .ghost,
-                size: .sm,
-                onPress: session.logout,
-                child: const Icon(FLucideIcons.logOut),
-              ),
-            ),
-          ],
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // The signed-in name is decoration; on narrow screens the
+            // brand and the action buttons need the room more.
+            final wide =
+                constraints.maxWidth >= AppSizes.narrowBreakpoint;
+            return Row(
+              spacing: AppSizes.gap8,
+              children: [
+                // Bounded so the brand name ellipsizes instead of pushing
+                // the buttons out.
+                const Expanded(
+                  child: Align(
+                    alignment: .centerLeft,
+                    child: AppBrand(),
+                  ),
+                ),
+                if (wide)
+                  Flexible(
+                    child: Text(
+                      session.user?.fullName ?? '',
+                      style: theme.typography.body.xs.copyWith(
+                        color: theme.colors.mutedForeground,
+                      ),
+                      overflow: .ellipsis,
+                    ),
+                  ),
+                FTooltip(
+                  tipBuilder: (_, _) => const Text(Strings.refresh),
+                  child: FButton.icon(
+                    variant: .ghost,
+                    size: .sm,
+                    onPress: admin.load,
+                    child: const Icon(FLucideIcons.refreshCw),
+                  ),
+                ),
+                FTooltip(
+                  tipBuilder: (_, _) => const Text(Strings.signOut),
+                  child: FButton.icon(
+                    variant: .ghost,
+                    size: .sm,
+                    onPress: session.logout,
+                    child: const Icon(FLucideIcons.logOut),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

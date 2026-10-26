@@ -146,6 +146,43 @@ def _save_png(image, case_id):
     return relative
 
 
+_pipeline = None
+_pipeline_dir = None
+
+
+def _run_model_inline(case_id, limit=1):
+    """Run the model inside the upload request (headless, no worker step).
+
+    The doctor then sees a finished reading instead of "Awaiting model".
+    Scoped to the uploaded case, so an older backlog cannot steal the turn.
+    Skipped in tests and when the model files are missing — the background
+    worker picks those queued predictions up. Returns how many were handled.
+    """
+    if current_app.testing:
+        return 0
+    try:
+        from .ml.pipeline import Pipeline
+    except Exception:
+        return 0  # torch not installed here; the worker handles it
+    models_dir = current_app.config["MODELS_DIR"]
+    global _pipeline, _pipeline_dir
+    if _pipeline is None or _pipeline_dir != models_dir:
+        try:
+            _pipeline = Pipeline(models_dir)
+        except Exception:
+            _pipeline = None
+            _pipeline_dir = None
+            return 0  # no model files here; the worker handles it
+        _pipeline_dir = models_dir
+    from . import worker as queue
+
+    try:
+        return queue.process_queued(_pipeline, limit=limit, case_id=case_id)
+    except Exception:
+        current_app.logger.warning("Inline model run failed.", exc_info=True)
+        return 0
+
+
 @bp.post("/cases")
 @login_required(ROLE_ADMIN)
 def create_case():
@@ -181,10 +218,14 @@ def create_case():
     db.session.add(case)
     db.session.flush()  # assigns case.id, which names the stored file
     case.image_path = _save_png(image, case.id)
-    # The model worker (not built yet) picks up queued predictions.
+    # Headless: run the model in this request so the doctor already sees
+    # the reading. Falls back to queued when models are missing (tests,
+    # or the worker drains it later).
     case.predictions.append(Prediction(state=QUEUED))
     audit(case, "created")
     db.session.commit()
+    _run_model_inline(case.id)
+    case = db.session.get(Case, case.id)
     return jsonify(_summary(case)), 201
 
 
@@ -381,7 +422,7 @@ def export():
                 p.model_version if p else None, p.label if p else None,
                 p.tb_probability if p else None, r.feedback.kind, r.feedback.derived,
                 r.feedback.note, r.verdict,
-                json.dumps([{"finding": m.finding_code, "points": m.points}
+                json.dumps([{"finding": m.finding_code, "note": m.note or "", "points": m.points}
                            for m in r.marks]),
             ])
         return _csv_response("model_feedback", header, rows)

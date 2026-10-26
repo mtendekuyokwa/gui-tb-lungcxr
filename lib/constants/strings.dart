@@ -24,9 +24,18 @@ class Strings {
   static const undo = "Undo";
   static const clearMarks = "Clear marks";
   static const fitToScreen = "Fit to screen";
-  static const segmentationComingSoon = "Segmentation runs on the backend";
-  static const segmentationComingSoonDetail =
-      "It isn't connected yet. Use Mark to outline the lungs; those marks will be sent as hints once it is.";
+  static const segAwaitingModel =
+      "The model hasn't made a lung mask for this image yet";
+  static const segUnavailable = "No lung mask for this image";
+  static const segClipped = "XAI clipped to the edited lungs";
+  static const segmentBrush = "Brush";
+  static const segmentPen = "Pen";
+  static const segmentEraser = "Eraser";
+  static const segmentWidth = "Stroke width";
+  static const resetSegmentEdits = "Reset to model mask";
+  static const maskEdits = "Mask edits";
+  static const maskEditsAdded = "added";
+  static const maskEditsRemoved = "removed";
   static const markHint = "Drag on the image to mark, then label the finding";
   static const clientId = "Client ID";
   static const name = "Name";
@@ -42,6 +51,9 @@ class Strings {
       "The TB model isn't connected yet, so I can't answer questions about this X-ray.";
   static const labelMark = "Label this mark";
   static const editLabel = "Edit label";
+  static const markNote = "Comment";
+  static const markNoteHint = "Describe this finding";
+  static const saveMark = "Save mark";
   static const deleteMark = "Delete mark";
   static const close = "Close";
   static const unlabelled = "Unlabelled";
@@ -87,6 +99,9 @@ class Strings {
   static const noCases = "No cases are assigned to you";
   static const noCasesDetail =
       "Cases appear here once the hospital admin assigns them.";
+  static const searchClients = "Search clients";
+  static const searchClientsHint = "Name or client ID";
+  static const noClientMatch = "No clients match this search";
   static const modelReading = "Model reading";
   static const modelFailed = "Model failed";
   static const modelTb = "TB suspected";
@@ -118,6 +133,8 @@ class Strings {
   static const cases = "Cases";
   static const all = "All";
   static const noCasesAdmin = "No cases match this filter";
+  static const waitingOnModel =
+      "Some readings are still with the model worker — keep 'flask worker' running.";
   static const uploadCase = "New case";
   static const patientName = "Patient name";
   static const hospitalNumber = "Hospital number (optional)";
@@ -128,11 +145,20 @@ class Strings {
   static const assignTo = "Assign to";
   static const selectCasesToAssign =
       "Tick open cases in the list, then pick a doctor.";
+  static const tickedCases = "selected";
+  static const tickedNowWith = "now with";
+  static const tickedHidden = "under another filter";
+  static const assignStale =
+      "Some ticked cases are no longer open and were unticked. Check the selection and try again.";
   static const noDoctors = "No active doctors";
   static const casesAssigned = "Cases assigned";
   static const caseDetail = "Case";
   static const selectCase = "Select a case to see its review.";
   static const doctor = "Doctor";
+  static const admin = "Admin";
+  static const createUser = "New user";
+  static const fullName = "Full name";
+  static const userCreated = "User created";
   static const noReviewYet = "No review yet";
   static const marks = "Marks";
   static const accept = "Accept";
@@ -141,6 +167,33 @@ class Strings {
   static const flagModelWrong = "Model flagged wrong";
   static const flagNeedsTesting = "Needs further testing";
   static const flaggedByServer = "recorded automatically";
+  static const doctors = "Doctors";
+  static const deactivate = "Deactivate";
+  static const reactivate = "Reactivate";
+  static const userDeactivated = "User deactivated";
+  static const userReactivated = "User reactivated";
+  static const showInactive = "Show inactive";
+  static const filterDoctor = "Doctor";
+  static const filterFlag = "Flag";
+  static const flagAll = "All flags";
+  static const flagModelWrongShort = "Model wrong";
+  static const flagNeedsTestingShort = "Needs testing";
+  static const dueDate = "Due date (optional)";
+  static const clearDueDate = "Clear";
+  static const stats = "Statistics";
+  static const statsOpen = "Open";
+  static const statsSubmitted = "Submitted";
+  static const statsAccepted = "Accepted";
+  static const statsAgreement = "Model agreement";
+  static const export = "Export";
+  static const exportReviews = "Reviews CSV";
+  static const exportFeedback = "Model feedback CSV";
+  static const exportCopied = "rows copied to clipboard";
+  static const exportRows = "rows";
+  static const xrayTab = "X-ray";
+  static const casesTab = "Cases";
+  static const reviewTab = "Review";
+  static const manageTab = "Manage";
 
   static const String somethingWentWrong =
       "Something Went Wrong. Please try again later.";
