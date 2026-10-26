@@ -8,6 +8,8 @@ import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
 import 'package:gui_lungcxr/feature_home/widgets/adjustment_panel.dart';
 import 'package:gui_lungcxr/feature_home/widgets/lesion_label_panel.dart';
 import 'package:gui_lungcxr/feature_home/widgets/mark_layer.dart';
+import 'package:gui_lungcxr/feature_home/widgets/mask_edit_layer.dart';
+import 'package:gui_lungcxr/feature_home/widgets/segment_panel.dart';
 import 'package:gui_lungcxr/feature_home/widgets/viewer_toolbar.dart';
 import 'package:gui_lungcxr/feature_home/widgets/xray_image.dart';
 import 'package:provider/provider.dart';
@@ -22,6 +24,11 @@ class CanvasWid extends StatelessWidget {
     final cases = context.watch<CaseState>();
     final selected = cases.selected!;
     final hasHeatmap = selected.prediction?.hasOverlay ?? false;
+    final hasMask = selected.prediction?.hasMask ?? false;
+    final showMask = editor.segmentationEnabled && hasMask;
+    // Erased lung regions are cut out of the heatmap while both layers show.
+    final heatClipped =
+        editor.xaiEnabled && hasHeatmap && showMask && editor.hasEraseEdits;
 
     return ClipRect(
       child: ColoredBox(
@@ -37,8 +44,9 @@ class CanvasWid extends StatelessWidget {
                     minScale: ImageEditorState.minScale,
                     maxScale: ImageEditorState.maxScale,
                     boundaryMargin: const .all(AppSizes.canvasBoundaryMargin),
-                    // Dragging draws in mark mode; wheel/pinch zoom still work.
-                    panEnabled: editor.tool != .mark,
+                    // Dragging draws in mark and segment modes; wheel/pinch
+                    // zoom still work.
+                    panEnabled: editor.tool != .mark && editor.tool != .segment,
                     child: Center(
                       child: Padding(
                         padding: const .all(AppSizes.gap24),
@@ -48,7 +56,16 @@ class CanvasWid extends StatelessWidget {
                           heatmapUrl: editor.xaiEnabled && hasHeatmap
                               ? cases.overlayUrl(selected.id)
                               : null,
-                          overlay: MarkLayer(editor: editor),
+                          maskUrl: showMask ? cases.maskUrl(selected.id) : null,
+                          overlay: Stack(
+                            children: [
+                              MarkLayer(editor: editor),
+                              MaskEditLayer(
+                                editor: editor,
+                                maskAvailable: hasMask,
+                              ),
+                            ],
+                          ),
                         ),
                       ),
                     ),
@@ -69,6 +86,8 @@ class CanvasWid extends StatelessWidget {
                         )
                       else if (editor.tool.isAdjustment)
                         AdjustmentPanel(editor: editor)
+                      else if (editor.tool == .segment)
+                        SegmentPanel(editor: editor)
                       else if (editor.tool == .mark)
                         FBadge(
                           variant: .secondary,
@@ -84,13 +103,35 @@ class CanvasWid extends StatelessWidget {
                     ],
                   ),
                 ),
-                if (editor.xaiEnabled && !hasHeatmap)
+                if ((editor.xaiEnabled && !hasHeatmap) ||
+                    (editor.segmentationEnabled && !hasMask))
                   Positioned(
                     left: AppSizes.gap12,
                     bottom: AppSizes.gap12,
+                    child: Column(
+                      crossAxisAlignment: .start,
+                      spacing: AppSizes.gap8,
+                      children: [
+                        if (editor.xaiEnabled && !hasHeatmap)
+                          FBadge(
+                            variant: .secondary,
+                            child: const Text(Strings.xaiUnavailable),
+                          ),
+                        if (editor.segmentationEnabled && !hasMask)
+                          FBadge(
+                            variant: .secondary,
+                            child: const Text(Strings.segUnavailable),
+                          ),
+                      ],
+                    ),
+                  ),
+                if (heatClipped)
+                  Positioned(
+                    right: AppSizes.gap12,
+                    bottom: AppSizes.gap12,
                     child: FBadge(
                       variant: .secondary,
-                      child: const Text(Strings.xaiUnavailable),
+                      child: const Text(Strings.segClipped),
                     ),
                   ),
               ],

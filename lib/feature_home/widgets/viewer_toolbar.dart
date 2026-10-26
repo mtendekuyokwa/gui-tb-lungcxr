@@ -24,6 +24,9 @@ class ViewerToolbar extends StatelessWidget {
       ),
     );
     final canEditMarks = editor.hasMarks && !editor.locked;
+    final canEditMask = editor.hasMaskEdits && !editor.locked;
+    final inSegment = editor.tool == .segment;
+    final canUndo = inSegment ? canEditMask : canEditMarks;
 
     return Wrap(
       spacing: AppSizes.gap6,
@@ -42,12 +45,16 @@ class ViewerToolbar extends StatelessWidget {
         button(
           FLucideIcons.undo2,
           Strings.undo,
-          canEditMarks ? editor.undoStroke : null,
+          canUndo
+              ? (inSegment ? editor.undoMaskEdit : editor.undoStroke)
+              : null,
         ),
         button(
           FLucideIcons.eraser,
-          Strings.clearMarks,
-          canEditMarks ? editor.clearMarks : null,
+          inSegment ? Strings.resetSegmentEdits : Strings.clearMarks,
+          canUndo
+              ? (inSegment ? editor.clearMaskEdits : editor.clearMarks)
+              : null,
         ),
       ],
     );

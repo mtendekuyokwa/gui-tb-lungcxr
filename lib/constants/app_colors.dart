@@ -21,4 +21,8 @@ class AppColors {
 
   /// Fill of a mark's tag while it is not the one being labelled.
   static const Color markTagBackground = Color(0xB3000000);
+
+  /// Translucent wash for the lung segmentation mask. Emerald sits apart
+  /// from the mark colours and the XAI heatmap.
+  static const Color maskTint = Color(0xFF34D399);
 }

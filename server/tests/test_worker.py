@@ -52,9 +52,12 @@ def test_worker_stores_reading_and_serves_overlay(app, client, admin, doc1):
         "label": "tb",
         "tb_probability": 0.91,
         "has_overlay": True,
+        "has_mask": True,
     }
     overlay = client.get(f"{API}/cases/{first}/overlay", headers=doc1)
     assert overlay.status_code == 200 and overlay.data[:4] == b"\x89PNG"
+    mask = client.get(f"{API}/cases/{first}/mask", headers=doc1)
+    assert mask.status_code == 200 and mask.data[:4] == b"\x89PNG"
     storage = pathlib.Path(app.config["STORAGE_DIR"])
     assert (storage / f"masks/{first}.png").is_file()
 

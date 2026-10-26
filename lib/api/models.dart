@@ -73,3 +73,51 @@ class Catalog {
     feedbackKinds: Option.listFromJson(json['feedback_kinds']),
   );
 }
+
+/// Counts the admin's statistics screen shows, from `GET /admin/stats`.
+class AdminStats {
+  const new({
+    this.byStatus = const {},
+    this.open = 0,
+    this.submitted = 0,
+    this.accepted = 0,
+    this.compared = 0,
+    this.agreed = 0,
+    this.rate,
+  });
+
+  final Map<String, int> byStatus;
+  final int open;
+  final int submitted;
+  final int accepted;
+  final int compared;
+  final int agreed;
+  final double? rate;
+
+  static AdminStats fromJson(Map<String, dynamic> json) {
+    final byStatus = <String, int>{};
+    for (final entry in (json['by_status'] as Map<String, dynamic>).entries) {
+      byStatus[entry.key] = (entry.value as num).toInt();
+    }
+    var open = 0;
+    var submitted = 0;
+    var accepted = 0;
+    // Per-doctor workload rows are not shown yet; only the totals matter.
+    for (final row in json['doctors'] as List? ?? const []) {
+      final map = row as Map<String, dynamic>;
+      open += ((map['open'] as num?) ?? 0).toInt();
+      submitted += ((map['submitted'] as num?) ?? 0).toInt();
+      accepted += ((map['accepted'] as num?) ?? 0).toInt();
+    }
+    final agreement = json['model_agreement'] as Map<String, dynamic>;
+    return AdminStats(
+      byStatus: byStatus,
+      open: open,
+      submitted: submitted,
+      accepted: accepted,
+      compared: ((agreement['compared'] as num?) ?? 0).toInt(),
+      agreed: ((agreement['agreed'] as num?) ?? 0).toInt(),
+      rate: (agreement['rate'] as num?)?.toDouble(),
+    );
+  }
+}

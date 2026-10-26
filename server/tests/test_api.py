@@ -10,7 +10,7 @@ API = "/api/v1"
 REVIEW = {
     "verdict": "tb_suspected",
     "note": "Right upper zone cavity.",
-    "marks": [{"finding": "cavity", "points": [[0.62, 0.21], [0.64, 0.23]]}],
+    "marks": [{"finding": "cavity", "note": "Cavity, right upper zone.", "points": [[0.62, 0.21], [0.64, 0.23]]}],
     "model_feedback": {"kind": "wrong_region", "note": "Heatmap on the heart."},
     "further_testing": {"tests": ["genexpert", "culture"], "urgency": "urgent"},
 }
@@ -105,13 +105,84 @@ def test_doctor_sees_only_assigned_cases(client, admin, doc1, doc2, case_id):
     assert client.get(f"{API}/cases/{unassigned}", headers=doc1).status_code == 404
     assert client.put(f"{API}/cases/{case_id}/review", headers=doc2, json=REVIEW).status_code == 404
     assert client.get(f"{API}/cases/{case_id}/image", headers=doc1).status_code == 200
-    # No overlay until the model worker exists.
+    # No overlay until the model runs.
     assert client.get(f"{API}/cases/{case_id}/overlay", headers=doc1).status_code == 404
 
 
 def test_opening_a_case_moves_it_to_in_review(client, admin, doc1, case_id):
     assert client.get(f"{API}/cases", headers=doc1).json[0]["status"] == "assigned"
     assert client.get(f"{API}/cases/{case_id}", headers=doc1).json["status"] == "in_review"
+
+
+def _write_mask(app, case_id, value=255):
+    from pathlib import Path
+
+    from PIL import Image as PilImage
+
+    path = Path(app.config["STORAGE_DIR"]) / f"masks/{case_id}.png"
+    path.parent.mkdir(parents=True, exist_ok=True)
+    PilImage.new("L", (16, 16), value).save(path, format="PNG")
+    case = db.session.get(Case, case_id)
+    case.prediction.state = DONE
+    case.prediction.mask_path = f"masks/{case_id}.png"
+    db.session.commit()
+
+
+def test_mask_endpoint_serves_worker_mask(app, client, admin, doc1, doc2, case_id):
+    assert client.get(f"{API}/cases/{case_id}/mask", headers=doc1).status_code == 404
+    assert client.get(f"{API}/cases/{case_id}", headers=doc1).json["prediction"]["has_mask"] is False
+
+    _write_mask(app, case_id)
+    image = client.get(f"{API}/cases/{case_id}/mask", headers=doc1)
+    assert image.status_code == 200 and image.data[:8] == b"\x89PNG\r\n\x1a\n"
+    assert client.get(f"{API}/cases/{case_id}", headers=doc1).json["prediction"]["has_mask"] is True
+    # The admin views through the same endpoint; another doctor cannot probe it.
+    assert client.get(f"{API}/cases/{case_id}/mask", headers=admin).status_code == 200
+    assert client.get(f"{API}/cases/{case_id}/mask", headers=doc2).status_code == 404
+
+
+MASK_EDITS = [
+    {"kind": "add", "tool": "brush", "width": 0.03, "points": [[0.4, 0.4], [0.45, 0.5]]},
+    {"kind": "erase", "tool": "pen", "width": 0.008, "points": [[0.6, 0.6]]},
+]
+
+
+def test_mask_edits_round_trip_and_replace(client, doc1, case_id):
+    saved = client.put(f"{API}/cases/{case_id}/review", headers=doc1, json={"mask_edits": MASK_EDITS})
+    assert saved.status_code == 200
+    assert saved.json["review"]["mask_edits"] == MASK_EDITS
+
+    client.put(f"{API}/cases/{case_id}/review", headers=doc1, json={"verdict": "no_tb"})
+    review = client.get(f"{API}/cases/{case_id}", headers=doc1).json["review"]
+    assert review["mask_edits"] == []
+
+    # Explicit null clears, like omitting the key.
+    cleared = client.put(
+        f"{API}/cases/{case_id}/review", headers=doc1, json={"mask_edits": MASK_EDITS})
+    assert cleared.status_code == 200
+    nulled = client.put(
+        f"{API}/cases/{case_id}/review", headers=doc1, json={"mask_edits": None})
+    assert nulled.status_code == 200
+    assert nulled.json["review"]["mask_edits"] == []
+
+
+def test_mask_edits_validation(client, doc1, case_id):
+    good = {"kind": "add", "tool": "brush", "width": 0.03, "points": [[0.1, 0.2]]}
+    bad_bodies = [
+        {"mask_edits": [{"kind": "fill", **{k: v for k, v in good.items() if k != "kind"}}]},
+        {"mask_edits": [{"tool": "spray", **{k: v for k, v in good.items() if k != "tool"}}]},
+        {"mask_edits": [{**good, "width": 0.0005}]},
+        {"mask_edits": [{**good, "width": 0.5}]},
+        {"mask_edits": [{**good, "width": True}]},
+        {"mask_edits": [{**good, "points": []}]},
+        {"mask_edits": [{**good, "points": [[1.5, 0.2]]}]},
+        {"mask_edits": [{**good, "points": "nope"}]},
+        {"mask_edits": ["nope"]},
+        {"mask_edits": {}},
+    ]
+    for body in bad_bodies:
+        response = client.put(f"{API}/cases/{case_id}/review", headers=doc1, json=body)
+        assert response.status_code == 422, body
 
 
 def test_assign_validates_and_is_all_or_nothing(client, admin, doc1, case_id):
@@ -166,6 +237,8 @@ def test_review_validation(client, doc1, case_id):
         {"marks": [{"finding": "cavity", "points": [[1.5, 0.2]]}]},
         {"marks": [{"finding": "cavity", "points": []}]},
         {"marks": [{"finding": "bogus", "points": [[0.1, 0.2]]}]},
+        {"marks": [{"finding": "cavity", "note": "x" * 2001, "points": [[0.1, 0.2]]}]},
+        {"marks": [{"finding": "cavity", "note": 5, "points": [[0.1, 0.2]]}]},
         {"disease_tags": ["flu"]},
         {"model_feedback": {"kind": "meh"}},
         {"further_testing": {"tests": []}},
@@ -179,6 +252,16 @@ def test_review_validation(client, doc1, case_id):
         f"{API}/cases/{case_id}/review", headers=doc1, json={"marks": [{"finding": None, "points": [[0, 1]]}]}
     )
     assert ok.status_code == 200
+    # A mark comment round-trips and is stripped like other free text.
+    noted = client.put(
+        f"{API}/cases/{case_id}/review",
+        headers=doc1,
+        json={"marks": [{"finding": "cavity", "note": "  RUL cavity  ", "points": [[0.1, 0.2]]}]},
+    )
+    assert noted.status_code == 200
+    assert noted.json["review"]["marks"] == [
+        {"finding": "cavity", "note": "RUL cavity", "points": [[0.1, 0.2]]}
+    ]
 
 
 def test_submit_requires_verdict_and_locks_review(client, doc1, case_id):
@@ -297,3 +380,46 @@ def test_expired_token_is_rejected(app, client):
     app.config["TOKEN_HOURS"] = -1
     headers = login(client, "doc1@test")
     assert client.get(f"{API}/auth/me", headers=headers).status_code == 401
+
+def test_swagger_endpoints(client):
+    res_json = client.get(f"{API}/swagger.json")
+    assert res_json.status_code == 200
+    data = res_json.json
+    assert data["swagger"] == "2.0"
+    assert "/auth/login" in data["paths"]
+    assert "/cases" in data["paths"]
+    assert "/admin/cases" in data["paths"]
+
+    for url in (f"{API}/", f"{API}"):
+        res_ui = client.get(url, follow_redirects=True)
+        assert res_ui.status_code == 200
+        assert b"SwaggerUIBundle" in res_ui.data
+
+    res_redirect = client.get(f"{API}/docs", follow_redirects=True)
+    assert res_redirect.status_code == 200
+    assert b"SwaggerUIBundle" in res_redirect.data
+
+
+def test_swagger_covers_every_endpoint(client):
+    """Every real API route+method must appear in swagger.json."""
+    import re
+
+    spec = client.get(f"{API}/swagger.json").json
+    documented = {
+        (path, method.upper())
+        for path, ops in spec["paths"].items()
+        for method in ops
+        if method.lower() in ("get", "post", "put", "patch", "delete")
+    }
+    missing = []
+    for rule in client.application.url_map.iter_rules():
+        if rule.endpoint.startswith("docs.") or rule.endpoint == "docs.docs_redirect":
+            continue  # the documentation machinery itself
+        if not str(rule).startswith("/api/"):
+            continue
+        path = re.sub(r"<(?:[^:<>]+:)?([^<>]+)>", r"{\1}", str(rule))
+        path = path.replace(API, "", 1) or "/"
+        for method in sorted(rule.methods - {"HEAD", "OPTIONS"}):
+            if (path, method) not in documented:
+                missing.append(f"{method} {path}")
+    assert missing == []

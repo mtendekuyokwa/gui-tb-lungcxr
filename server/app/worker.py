@@ -9,13 +9,24 @@ from .extensions import db
 from .models import DONE, FAILED, QUEUED, Case, Prediction
 
 
-def process_queued(pipeline, limit=None):
-    """Run the pipeline on queued predictions, oldest first. Returns how many were handled."""
+def process_queued(pipeline, limit=None, case_id=None):
+    """Run the pipeline on queued predictions, oldest first. Returns how many were handled.
+
+    With ``case_id`` the call is scoped to that case's queued prediction, so the
+    inline run after an upload always answers the fresh case instead of an
+    older backlog entry.
+    """
     storage = pathlib.Path(current_app.config["STORAGE_DIR"])
     handled = 0
+    targeted = case_id is not None
     while limit is None or handled < limit:
-        prediction = Prediction.query.filter_by(
-            state=QUEUED).order_by(Prediction.id).first()
+        if targeted:
+            # Only this case: skip, not fall back to the backlog.
+            prediction = Prediction.query.filter_by(
+                state=QUEUED, case_id=case_id).order_by(Prediction.id).first()
+        else:
+            prediction = Prediction.query.filter_by(
+                state=QUEUED).order_by(Prediction.id).first()
         if prediction is None:
             break
         case = db.session.get(Case, prediction.case_id)

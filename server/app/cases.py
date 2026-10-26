@@ -20,6 +20,7 @@ from .models import (
     Case,
     DiseaseTag,
     Mark,
+    MaskEdit,
     ModelFeedback,
     Review,
     TestRequest,
@@ -101,6 +102,61 @@ def get_overlay(case_id):
     return _send_stored(prediction.overlay_path if prediction else None)
 
 
+MASK_EDIT_KINDS = ("add", "erase")
+MASK_EDIT_TOOLS = ("brush", "pen")
+# Stroke width as a fraction of the image width.
+MASK_EDIT_MIN_WIDTH = 0.002
+MASK_EDIT_MAX_WIDTH = 0.2
+
+
+def _parse_mask_edits(raw):
+    if not isinstance(raw, list):
+        raise ApiError(422, "'mask_edits' must be a list.")
+    edits = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ApiError(422, "Each mask edit must be an object.")
+        kind = item.get("kind")
+        if not isinstance(kind, str) or kind not in MASK_EDIT_KINDS:
+            raise ApiError(422, f"Unknown mask edit kind: {kind!r}.")
+        tool = item.get("tool")
+        if not isinstance(tool, str) or tool not in MASK_EDIT_TOOLS:
+            raise ApiError(422, f"Unknown mask edit tool: {tool!r}.")
+        width = item.get("width")
+        if (
+            not isinstance(width, (int, float))
+            or isinstance(width, bool)
+            or not MASK_EDIT_MIN_WIDTH <= width <= MASK_EDIT_MAX_WIDTH
+        ):
+            raise ApiError(
+                422, "'mask edit width' must be between "
+                f"{MASK_EDIT_MIN_WIDTH} and {MASK_EDIT_MAX_WIDTH}.")
+        points = item.get("points")
+        if not isinstance(points, list) or not points:
+            raise ApiError(422, "Each mask edit needs a non-empty 'points' list.")
+        clean = []
+        for point in points:
+            ok = (
+                isinstance(point, list)
+                and len(point) == 2
+                and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in point)
+                and all(0 <= v <= 1 for v in point)
+            )
+            if not ok:
+                raise ApiError(
+                    422, "Mask edit points must be [x, y] pairs between 0 and 1.")
+            clean.append([float(point[0]), float(point[1])])
+        edits.append(MaskEdit(kind=kind, tool=tool, width=float(width), points=clean))
+    return edits
+
+
+@bp.get("/cases/<int:case_id>/mask")
+@login_required()
+def get_mask(case_id):
+    prediction = _viewable_case(case_id).prediction
+    return _send_stored(prediction.mask_path if prediction else None)
+
+
 def _text(value, field, limit=4000):
     if value is None:
         return ""
@@ -126,6 +182,7 @@ def _parse_marks(raw):
         finding = item.get("finding")
         if finding is not None:
             _code(finding, catalog.FINDINGS, "finding")
+        note = _text(item.get("note", ""), "marks.note", 2000)
         points = item.get("points")
         if not isinstance(points, list) or not points:
             raise ApiError(422, "Each mark needs a non-empty 'points' list.")
@@ -141,7 +198,7 @@ def _parse_marks(raw):
                 raise ApiError(
                     422, "Mark points must be [x, y] pairs between 0 and 1.")
             clean.append([float(point[0]), float(point[1])])
-        marks.append(Mark(points=clean, finding_code=finding))
+        marks.append(Mark(points=clean, finding_code=finding, note=note))
     return marks
 
 
@@ -235,6 +292,8 @@ def save_review(case_id):
         _code(verdict, catalog.VERDICTS, "verdict")
     note = _text(data.get("note"), "note")
     marks = _parse_marks(data.get("marks", []))
+    raw_edits = data.get("mask_edits", [])
+    edits = _parse_mask_edits([] if raw_edits is None else raw_edits)
     tags = _parse_disease_tags(data.get("disease_tags", []))
     tests = _parse_tests(data.get("further_testing"))
 
@@ -245,6 +304,7 @@ def save_review(case_id):
     review.verdict = verdict
     review.note = note
     review.marks = marks
+    review.mask_edits = edits
     review.disease_tags = tags
     review.test_requests = tests
     review.updated_at = now()

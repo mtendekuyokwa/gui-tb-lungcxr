@@ -16,14 +16,18 @@ class Endpoints {
   static String caseDetail(int id) => '/cases/$id';
   static String caseImage(int id) => '/cases/$id/image';
   static String caseOverlay(int id) => '/cases/$id/overlay';
+  static String caseMask(int id) => '/cases/$id/mask';
   static String review(int id) => '/cases/$id/review';
   static String submitReview(int id) => '/cases/$id/review/submit';
 
   // Admin
   static const String adminUsers = '/admin/users';
+  static String adminUser(int id) => '/admin/users/$id';
   static const String adminCases = '/admin/cases';
   static const String adminAssign = '/admin/cases/assign';
   static String adminCase(int id) => '/admin/cases/$id';
   static String adminAccept(int id) => '/admin/cases/$id/accept';
   static String adminReturn(int id) => '/admin/cases/$id/return';
+  static const String adminExport = '/admin/export';
+  static const String adminStats = '/admin/stats';
 }

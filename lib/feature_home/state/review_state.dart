@@ -50,6 +50,7 @@ class ReviewState extends ChangeNotifier {
   bool _applying = false;
   bool _disposed = false;
   int _seenMarkRevision = 0;
+  int _seenMaskRevision = 0;
 
   CxrCase? get detail => _detail;
   bool get loading => _loading;
@@ -115,9 +116,16 @@ class ReviewState extends ChangeNotifier {
   }
 
   void _onEditorChanged() {
-    if (editor.markRevision == _seenMarkRevision) return;
-    _seenMarkRevision = editor.markRevision;
-    if (!_applying && editable) _changed();
+    var changed = false;
+    if (editor.markRevision != _seenMarkRevision) {
+      _seenMarkRevision = editor.markRevision;
+      changed = true;
+    }
+    if (editor.maskRevision != _seenMaskRevision) {
+      _seenMaskRevision = editor.maskRevision;
+      changed = true;
+    }
+    if (changed && !_applying && editable) _changed();
   }
 
   void _changed() {
@@ -132,6 +140,7 @@ class ReviewState extends ChangeNotifier {
     verdict: _verdict,
     note: _note,
     marks: editor.marks,
+    maskEdits: editor.maskEdits,
     // Disease tags only mean something under the "other disease" verdict.
     diseases: _verdict == otherDisease ? _diseases.toList() : const [],
     feedbackKind: _feedbackKind,
@@ -207,8 +216,10 @@ class ReviewState extends ChangeNotifier {
         ..addAll(review?.tests ?? const []);
       _urgency = review?.urgency ?? defaultUrgency;
       editor.replaceMarks(review?.marks ?? const []);
+      editor.replaceMaskEdits(review?.maskEdits ?? const []);
     }
     _seenMarkRevision = editor.markRevision;
+    _seenMaskRevision = editor.maskRevision;
     _applying = false;
     onCaseChanged(detail);
   }

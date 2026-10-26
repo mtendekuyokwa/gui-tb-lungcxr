@@ -5,17 +5,20 @@ import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
 import 'package:gui_lungcxr/feature_home/utils/color_matrix.dart';
+import 'package:gui_lungcxr/feature_home/utils/segmentation.dart';
+import 'package:gui_lungcxr/feature_home/widgets/segmentation_layers.dart';
 import 'package:provider/provider.dart';
 
 /// Shows the X-ray at its native aspect ratio with the editor's colour
-/// adjustments applied, and stacks the XAI heatmap (if any) and [overlay]
-/// exactly over the image bounds.
+/// adjustments applied, and stacks the lung mask (if any), the XAI heatmap
+/// (if any) and [overlay] exactly over the image bounds.
 class XrayImage extends StatefulWidget {
   const new({
     required this.url,
     required this.overlay,
     this.headers = const {},
     this.heatmapUrl,
+    this.maskUrl,
     super.key,
   });
 
@@ -27,10 +30,10 @@ class XrayImage extends StatefulWidget {
 
   /// Grad-CAM overlay drawn over the X-ray while XAI is on.
   final String? heatmapUrl;
-  final Widget overlay;
 
-  /// The heatmap is see-through so the X-ray stays readable under it.
-  static const double _heatmapOpacity = 0.6;
+  /// Lung segmentation mask drawn under the heatmap while enabled.
+  final String? maskUrl;
+  final Widget overlay;
 
   @override
   State<XrayImage> createState() => _XrayImageState();
@@ -111,6 +114,18 @@ class _XrayImageState extends State<XrayImage> {
     }
 
     final editor = context.watch<ImageEditorState>();
+    final maskUrl = widget.maskUrl;
+    final heatmapUrl = widget.heatmapUrl;
+    final hasEdits = editor.maskEdits.isNotEmpty;
+    // Erased lung regions are cut out of the heatmap, so the XAI only
+    // shows inside the edited segmentation. Added regions need no clip:
+    // the heatmap carries no signal outside the model's mask. No mask
+    // layer, no clip: a hidden mask must not punch holes in the heatmap.
+    final clipHeat =
+        heatmapUrl != null &&
+        maskUrl != null &&
+        hasEdits &&
+        editor.hasEraseEdits;
     return AspectRatio(
       aspectRatio: aspectRatio,
       child: Stack(
@@ -132,14 +147,43 @@ class _XrayImageState extends State<XrayImage> {
               gaplessPlayback: true,
             ),
           ),
-          if (widget.heatmapUrl case final heatmap?)
-            Opacity(
-              opacity: XrayImage._heatmapOpacity,
+          if (maskUrl != null && !hasEdits)
+            ColorFiltered(
+              colorFilter: ColorFilter.matrix(
+                maskTintMatrix(AppColors.maskTint, AppSizes.maskFillOpacity),
+              ),
               child: Image.network(
-                heatmap,
+                maskUrl,
                 headers: widget.headers,
                 fit: .fill,
                 errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          if (maskUrl != null && hasEdits)
+            MaskCompositeView(
+              maskUrl: maskUrl,
+              headers: widget.headers,
+              edits: editor.maskEdits,
+              revision: editor.maskRevision,
+            ),
+          if (heatmapUrl != null && !clipHeat)
+            Opacity(
+              opacity: heatmapOverlayOpacity,
+              child: Image.network(
+                heatmapUrl,
+                headers: widget.headers,
+                fit: .fill,
+                errorBuilder: (_, _, _) => const SizedBox.shrink(),
+              ),
+            ),
+          if (heatmapUrl != null && clipHeat)
+            Opacity(
+              opacity: heatmapOverlayOpacity,
+              child: ClippedHeatmapView(
+                heatmapUrl: heatmapUrl,
+                headers: widget.headers,
+                edits: editor.maskEdits,
+                revision: editor.maskRevision,
               ),
             ),
           widget.overlay,

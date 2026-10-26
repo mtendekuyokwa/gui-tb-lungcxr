@@ -37,15 +37,12 @@ Severity: **High** = can give a wrong clinical signal or leak data.
 
 | # | Severity | Issue |
 | --- | --- | --- |
-| F1 | Medium | **A page reload signs the user out.** The token is kept in memory only. |
-| F2 | Medium | **Opening a mark's label panel saves a draft.** Selecting a mark counts as a change, so a returned case moves to "In review" before anything was edited. |
-| F3 | Medium | **The X-ray file picker has not been tested in a browser.** It opens a native dialog that automation cannot drive. Upload itself is covered by the live test. |
-| F4 | Medium | **The model reading is shown before the doctor gives a verdict.** That is faster but biases the doctor, which weakens the "model was wrong" data. A product decision, not yet made. |
-| F5 | Low | **The Assign button moves** up when the first case is ticked, because the hint text above it disappears. |
-| F6 | Low | **Admin cannot yet** create or deactivate doctors, export CSV, see statistics, or filter by doctor or flag from the app. The backend supports all of these. |
-| F7 | Low | **Segment tool and Assistant chat do nothing real.** Segment shows a toast; chat gives one canned reply. The lung mask the backend now stores is not shown anywhere. |
-| F8 | Low | **Desktop-width layout only.** Nothing adapts to tablets or phones. |
-| F9 | Low | **Leftovers from the demo:** `AppImages`, the portraits in `assets/images/patients/`, the `Example` widget in `main.dart`, and the unused `imosys_flutter_package` dependency. `README.md` is still the Flutter template. |
+| F1 | Medium | **The X-ray file picker has not been tested in a browser.** It opens a native dialog that automation cannot drive. Upload itself is covered by the live test. |
+| F2 | Medium | **The model reading is shown before the doctor gives a verdict.** That is faster but biases the doctor, which weakens the "model was wrong" data. A product decision, not yet made. |
+| F3 | Low | **Assign button moves** up when the first case is ticked, because the hint text above it disappears. Fixed by the always-present selection line; remove once verified on screen. |
+| F4 | Low | **Admin export copies CSV to the clipboard** instead of downloading a file, because downloads need platform APIs plus the bearer token. |
+| F5 | Low | **Assistant chat does nothing real.** It gives one canned reply. |
+| F6 | Low | **Leftovers from the demo:** `AppImages`, the portraits in `assets/images/patients/`, the `Example` widget in `main.dart`, and the unused `imosys_flutter_package` dependency. `README.md` is still the Flutter template. |
 
 ## Data and repository
 

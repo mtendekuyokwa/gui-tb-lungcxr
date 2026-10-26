@@ -161,6 +161,7 @@ class Prediction(db.Model):
             "label": self.label,
             "tb_probability": self.tb_probability,
             "has_overlay": bool(self.overlay_path),
+            "has_mask": bool(self.mask_path),
         }
 
 
@@ -184,6 +185,8 @@ class Review(db.Model):
     doctor = db.relationship("User")
     marks = db.relationship("Mark", order_by="Mark.id",
                             cascade="all, delete-orphan")
+    mask_edits = db.relationship("MaskEdit", order_by="MaskEdit.id",
+                                 cascade="all, delete-orphan")
     disease_tags = db.relationship(
         "DiseaseTag", order_by="DiseaseTag.id", cascade="all, delete-orphan"
     )
@@ -203,7 +206,14 @@ class Review(db.Model):
             "note": self.note,
             "submitted_at": iso(self.submitted_at),
             "updated_at": iso(self.updated_at),
-            "marks": [{"finding": m.finding_code, "points": m.points} for m in self.marks],
+            "marks": [
+                {"finding": m.finding_code, "note": m.note or "", "points": m.points}
+                for m in self.marks
+            ],
+            "mask_edits": [
+                {"kind": e.kind, "tool": e.tool, "width": e.width, "points": e.points}
+                for e in self.mask_edits
+            ],
             "disease_tags": [
                 {"code": t.disease_code, "free_text": t.free_text} for t in self.disease_tags
             ],
@@ -238,6 +248,24 @@ class Mark(db.Model):
     points = db.Column(db.JSON, nullable=False)
     # Null while the mark is unlabelled.
     finding_code = db.Column(db.String(64))
+    # The doctor's comment describing the finding.
+    note = db.Column(db.Text, nullable=False, default="")
+
+
+class MaskEdit(db.Model):
+    __tablename__ = "mask_edits"
+
+    id = db.Column(db.Integer, primary_key=True)
+    review_id = db.Column(db.Integer, db.ForeignKey(
+        "reviews.id"), nullable=False, index=True)
+    # 'add' paints lung back in, 'erase' cuts it away.
+    kind = db.Column(db.String(16), nullable=False)
+    # 'brush' for broad strokes, 'pen' for fine ones.
+    tool = db.Column(db.String(16), nullable=False)
+    # Stroke width as a fraction of the image width.
+    width = db.Column(db.Float, nullable=False)
+    # List of [x, y] pairs, each 0..1 relative to image width and height.
+    points = db.Column(db.JSON, nullable=False)
 
 
 class DiseaseTag(db.Model):
