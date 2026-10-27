@@ -32,6 +32,7 @@ class CaseState extends ChangeNotifier {
 
   List<CxrCase> _cases = const [];
   bool _loading = true;
+  bool _busy = false;
   String? _error;
   int? _selectedId;
   bool _disposed = false;
@@ -44,6 +45,10 @@ class CaseState extends ChangeNotifier {
 
   List<CxrCase> get cases => _cases;
   bool get loading => _loading;
+
+  /// True while the doctor's own upload is under way.
+  bool get busy => _busy;
+
   String? get error => _error;
 
   /// The client's search text; the list shows only matching cases.
@@ -86,6 +91,38 @@ class CaseState extends ChangeNotifier {
     _loading = false;
     _notify();
     _schedulePoll();
+  }
+
+  /// The doctor's own upload: creates a case owned by them and selects it.
+  Future<bool> upload({
+    required String patientName,
+    required String hospitalNumber,
+    required Uint8List bytes,
+    required String filename,
+  }) async {
+    if (_busy) return false;
+    _busy = true;
+    _error = null;
+    _notify();
+    var ok = true;
+    try {
+      final created = await _api.uploadCase(
+        patientName: patientName.trim(),
+        hospitalNumber: hospitalNumber.trim().isEmpty
+            ? null
+            : hospitalNumber.trim(),
+        bytes: bytes,
+        filename: filename,
+      );
+      await load();
+      _selectedId = created.id;
+    } on ApiException catch (e) {
+      _error = e.message;
+      ok = false;
+    }
+    _busy = false;
+    _notify();
+    return ok;
   }
 
   void select(int id) {

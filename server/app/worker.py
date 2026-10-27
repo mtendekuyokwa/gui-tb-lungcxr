@@ -58,3 +58,38 @@ def run_forever(pipeline, poll_seconds=2.0):
         if process_queued(pipeline) == 0:
             db.session.rollback()  # end the read transaction so new rows are seen
             time.sleep(poll_seconds)
+
+
+_pipeline = None
+_pipeline_dir = None
+
+
+def run_model_inline(case_id, limit=1):
+    """Run the model inside a request (headless, no worker step).
+
+    The doctor then sees a finished reading instead of "Awaiting model".
+    Scoped to one case, so an older backlog cannot steal the turn.
+    Skipped in tests and when the model files are missing — the background
+    worker picks those queued predictions up. Returns how many were handled.
+    """
+    if current_app.testing:
+        return 0
+    try:
+        from .ml.pipeline import Pipeline
+    except Exception:
+        return 0  # torch not installed here; the worker handles it
+    models_dir = current_app.config["MODELS_DIR"]
+    global _pipeline, _pipeline_dir
+    if _pipeline is None or _pipeline_dir != models_dir:
+        try:
+            _pipeline = Pipeline(models_dir)
+        except Exception:
+            _pipeline = None
+            _pipeline_dir = None
+            return 0  # no model files here; the worker handles it
+        _pipeline_dir = models_dir
+    try:
+        return process_queued(_pipeline, limit=limit, case_id=case_id)
+    except Exception:
+        current_app.logger.warning("Inline model run failed.", exc_info=True)
+        return 0

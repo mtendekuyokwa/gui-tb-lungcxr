@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:gui_lungcxr/api/api_client.dart';
 import 'package:gui_lungcxr/constants/endpoints.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
@@ -14,6 +16,22 @@ class CaseApi {
     final json = await _client.get(Endpoints.cases) as List;
     return [for (final item in json) CxrCase.fromJson(item)];
   }
+
+  /// Creates a case with the signed-in doctor as its owner.
+  Future<CxrCase> uploadCase({
+    required String patientName,
+    String? hospitalNumber,
+    required Uint8List bytes,
+    required String filename,
+  }) async => CxrCase.fromJson(
+    await _client.upload(
+      Endpoints.cases,
+      fields: {'patient_name': patientName, 'hospital_number': ?hospitalNumber},
+      fileField: 'image',
+      bytes: bytes,
+      filename: filename,
+    ),
+  );
 
   /// One case with its review; fetching it marks it as opened.
   Future<CxrCase> caseDetail(int id) async =>
