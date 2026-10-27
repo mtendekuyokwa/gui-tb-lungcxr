@@ -57,9 +57,14 @@ class Pipeline:
             raise ModelError("No lungs found in the image.")
         masked, mask_small = preprocess.classifier_arrays(gray, mask)
         label, tb_probability, cam = self.classifier.predict(masked)
+        # The heatmap is blended over the mask at the overlay (SIZE) resolution.
+        mask_big = np.asarray(
+            Image.fromarray((mask_small * 255).astype(np.uint8)).resize(
+                (preprocess.SIZE, preprocess.SIZE), Image.BILINEAR),
+            dtype=np.float32) / 255.0
         return Reading(
             label=label,
             tb_probability=tb_probability,
             mask=Image.fromarray(mask.astype(np.uint8) * 255),
-            overlay=heatmap_overlay(cam, mask_small),
+            overlay=heatmap_overlay(cam, mask_big),
         )

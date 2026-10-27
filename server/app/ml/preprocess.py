@@ -5,6 +5,9 @@ import torch
 from PIL import Image
 
 SIZE = 512
+# The classifier runs at this resolution (CPU fine-tune / inference speed);
+# the segmenter still runs at SIZE and the overlay is drawn at SIZE.
+CLASSIFIER_SIZE = 256
 IMAGENET_MEAN = torch.tensor([0.485, 0.456, 0.406]).view(3, 1, 1)
 IMAGENET_STD = torch.tensor([0.229, 0.224, 0.225]).view(3, 1, 1)
 
@@ -31,15 +34,16 @@ def segmenter_input(gray):
     return ((array.repeat(3, 1, 1) - IMAGENET_MEAN) / IMAGENET_STD)[None]
 
 
-def classifier_arrays(gray, mask):
-    """The masked 512x512 image (0..1) and the resized mask (0..1).
+def classifier_arrays(gray, mask, size=None):
+    """The masked classifier-res image (0..1) and the resized mask (0..1).
 
     Same steps as MaskedCXRDataset in the training script: PIL resize of both
     the image and the 0/255 mask with PIL's default filter, then multiply.
     """
-    image = np.asarray(gray.resize((SIZE, SIZE)), dtype=np.float32) / 255.0
+    size = CLASSIFIER_SIZE if size is None else size
+    image = np.asarray(gray.resize((size, size)), dtype=np.float32) / 255.0
     mask_image = Image.fromarray(mask.astype(np.uint8) * 255)
-    mask_small = np.asarray(mask_image.resize((SIZE, SIZE)), dtype=np.float32) / 255.0
+    mask_small = np.asarray(mask_image.resize((size, size)), dtype=np.float32) / 255.0
     return image * mask_small, mask_small
 
 
