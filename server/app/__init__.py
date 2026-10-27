@@ -45,7 +45,7 @@ def create_app(config=None):
         ),
         STORAGE_DIR=os.environ.get("LUNGCXR_STORAGE_DIR", str(SERVER_DIR / "storage")),
         MODELS_DIR=os.environ.get("LUNGCXR_MODELS_DIR", str(SERVER_DIR / "models")),
-        MODEL_VERSION="tb-resnet18-seg512-v1",
+        MODEL_VERSION="tb-resnet18-seg512-cls256-ft-th02-v3",
         TOKEN_HOURS=8,
         MAX_CONTENT_LENGTH=50 * 1024 * 1024,
         CORS_ORIGINS=os.environ.get("LUNGCXR_CORS_ORIGINS", "*"),
