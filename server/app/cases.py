@@ -66,6 +66,25 @@ def _send_stored(relative_path):
     return send_file(path, mimetype="image/png", max_age=0)
 
 
+@bp.post("/cases")
+@login_required(ROLE_DOCTOR)
+def create_case():
+    """The doctor uploads an X-ray and owns the case from the start."""
+    upload = request.files.get("image")
+    if upload is None:
+        raise ApiError(422, "An 'image' file is required.")
+    from .upload import create_case
+
+    case = create_case(
+        upload,
+        request.form,
+        assigned_to=g.user.id,
+        assigned_by=g.user.id,
+        note=f"self-uploaded by {g.user.full_name}",
+    )
+    return jsonify(_detail(case)), 201
+
+
 @bp.get("/cases")
 @login_required(ROLE_DOCTOR)
 def list_cases():

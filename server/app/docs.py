@@ -373,6 +373,15 @@ class CasesList(Resource):
     def get(self):
         """List assigned cases (Doctor)"""
 
+    @api.doc(description="The doctor uploads a chest X-ray image and creates a case that is assigned to them from the start.")
+    @api.expect(upload_parser)
+    @api.response(201, "Case created", admin_case_detail_model)
+    @api.response(401, "Not authenticated", error_model)
+    @api.response(403, "Not allowed for this role", error_model)
+    @api.response(422, "Missing image, bad image format, or missing patient name", error_model)
+    def post(self):
+        """Upload own case (Doctor)"""
+
 
 @api.route("/cases/<int:case_id>")
 class CaseDetail(Resource):

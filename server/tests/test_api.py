@@ -25,6 +25,43 @@ def set_prediction(case_id, label, probability):
     db.session.commit()
 
 
+# --- cases --------------------------------------------------------------------
+
+
+def test_doctor_uploads_and_owns_the_case(client, doc1):
+    """The doctor's own upload is assigned to them and open for review."""
+    data = {"image": (png_bytes(), "cxr.png"), "patient_name": "Self Upload"}
+    response = client.post(f"{API}/cases", headers=doc1, data=data, content_type="multipart/form-data")
+    assert response.status_code == 201, response.json
+    case = response.json
+    assert case["status"] == "assigned"
+    assert case["prediction"]["state"] == "queued"  # tests run no model inline
+    assert case["review"] is None
+    # Saved as one of the doctor's cases.
+    mine = client.get(f"{API}/cases", headers=doc1).json
+    assert any(row["id"] == case["id"] for row in mine)
+    assert mine[0]["assigned_to"] is not None
+
+
+def test_doctor_uploads_need_a_token_and_a_name(client, doc1):
+    response = client.post(
+        f"{API}/cases", headers=doc1,
+        data={"image": (png_bytes(), "cxr.png")},
+        content_type="multipart/form-data")
+    assert response.status_code == 422 and "patient_name" in response.json["error"]
+    unauthorized = client.post(
+        f"{API}/cases",
+        data={"image": (png_bytes(), "cxr.png"), "patient_name": "Anon"},
+        content_type="multipart/form-data")
+    assert unauthorized.status_code == 401
+
+
+def test_admin_upload_still_creates_unassigned(client, admin):
+    data = {"image": (png_bytes(), "cxr.png"), "patient_name": "Admin Upload"}
+    response = client.post(f"{API}/admin/cases", headers=admin, data=data, content_type="multipart/form-data")
+    assert response.status_code == 201 and response.json["status"] == "unassigned"
+
+
 # --- auth ---------------------------------------------------------------------
 
 

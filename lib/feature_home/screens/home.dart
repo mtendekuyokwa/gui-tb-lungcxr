@@ -75,12 +75,8 @@ class DoctorPanels extends StatelessWidget {
     return Column(
       crossAxisAlignment: .stretch,
       children: [
-        ConstrainedBox(
-          constraints: const BoxConstraints(
-            maxHeight: AppSizes.caseListMaxHeight,
-          ),
-          child: const SingleChildScrollView(child: ClientBoard()),
-        ),
+        // The board shrink-wraps; its case list is capped inside ClientBoard.
+        const ClientBoard(),
         // Panel state belongs to one case; reset it on switch.
         Expanded(child: SidePanel(key: ValueKey(id))),
       ],

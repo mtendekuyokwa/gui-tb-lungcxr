@@ -1,3 +1,5 @@
+import 'dart:typed_data';
+
 import 'package:flutter_test/flutter_test.dart';
 import 'package:gui_lungcxr/feature_auth/state/session_state.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
@@ -37,6 +39,39 @@ void main() {
     await _settle();
     return review;
   }
+
+  test('the doctor can upload a case and it is selected', () async {
+    final ok = await cases.upload(
+      patientName: 'New Upload',
+      hospitalNumber: 'H-9',
+      bytes: Uint8List.fromList([1, 2, 3]),
+      filename: 'cxr.png',
+    );
+    expect(ok, isTrue);
+    expect(cases.error, isNull);
+    expect(cases.busy, isFalse);
+    expect(backend.log, contains('POST /cases'));
+    // The new case is in the list and opened.
+    expect(cases.cases.any((c) => c.patientName == 'New Upload'), isTrue);
+    expect(cases.selected?.patientName, 'New Upload');
+  });
+
+  test('an unreachable backend keeps the upload failed and visible', () async {
+    backend.failSaves = true;
+    // Uploads fail only on reachability or a backend error; fake that by
+    // removing the token so the call comes back 401.
+    final token = backend.api.token;
+    backend.api.token = null;
+    final ok = await cases.upload(
+      patientName: 'X',
+      hospitalNumber: '',
+      bytes: Uint8List.fromList([1]),
+      filename: 'cxr.png',
+    );
+    expect(ok, isFalse);
+    expect(cases.error, 'Missing bearer token.');
+    backend.api.token = token;
+  });
 
   test(
     'login stores the token, user and catalog; wrong password does not',

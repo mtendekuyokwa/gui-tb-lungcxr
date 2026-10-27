@@ -3,11 +3,9 @@
 import csv
 import io
 import json
-import pathlib
 from datetime import datetime, timezone
 
-from flask import Blueprint, Response, current_app, g, jsonify, request
-from PIL import Image, UnidentifiedImageError
+from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import func
 
 from .cases import reopen
@@ -19,7 +17,6 @@ from .models import (
     CASE_STATUSES,
     DONE,
     OPEN_STATUSES,
-    QUEUED,
     RETURNED,
     ROLE_ADMIN,
     ROLE_DOCTOR,
@@ -27,8 +24,6 @@ from .models import (
     UNASSIGNED,
     Case,
     ModelFeedback,
-    Patient,
-    Prediction,
     Review,
     TestRequest,
     User,
@@ -125,107 +120,15 @@ def _summary(case):
     }
 
 
-def _read_image(upload):
-    try:
-        image = Image.open(upload.stream)
-        if image.format not in UPLOAD_FORMATS:
-            raise ApiError(422, "Image must be PNG or JPEG.")
-        image.load()
-    except (UnidentifiedImageError, OSError):
-        raise ApiError(422, "Image must be PNG or JPEG.")
-    if image.mode not in ("L", "RGB", "RGBA", "I", "I;16"):
-        image = image.convert("RGB")
-    return image
-
-
-def _save_png(image, case_id):
-    relative = f"images/{case_id}.png"
-    path = pathlib.Path(current_app.config["STORAGE_DIR"]) / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(path, format="PNG")
-    return relative
-
-
-_pipeline = None
-_pipeline_dir = None
-
-
-def _run_model_inline(case_id, limit=1):
-    """Run the model inside the upload request (headless, no worker step).
-
-    The doctor then sees a finished reading instead of "Awaiting model".
-    Scoped to the uploaded case, so an older backlog cannot steal the turn.
-    Skipped in tests and when the model files are missing — the background
-    worker picks those queued predictions up. Returns how many were handled.
-    """
-    if current_app.testing:
-        return 0
-    try:
-        from .ml.pipeline import Pipeline
-    except Exception:
-        return 0  # torch not installed here; the worker handles it
-    models_dir = current_app.config["MODELS_DIR"]
-    global _pipeline, _pipeline_dir
-    if _pipeline is None or _pipeline_dir != models_dir:
-        try:
-            _pipeline = Pipeline(models_dir)
-        except Exception:
-            _pipeline = None
-            _pipeline_dir = None
-            return 0  # no model files here; the worker handles it
-        _pipeline_dir = models_dir
-    from . import worker as queue
-
-    try:
-        return queue.process_queued(_pipeline, limit=limit, case_id=case_id)
-    except Exception:
-        current_app.logger.warning("Inline model run failed.", exc_info=True)
-        return 0
-
-
 @bp.post("/cases")
 @login_required(ROLE_ADMIN)
 def create_case():
     upload = request.files.get("image")
     if upload is None:
         raise ApiError(422, "An 'image' file is required.")
-    # Validated before any row is created, so a bad file leaves nothing behind.
-    image = _read_image(upload)
-    form = request.form
-    hospital_number = form.get("hospital_number", "").strip() or None
-    patient = (
-        Patient.query.filter_by(hospital_number=hospital_number).first()
-        if hospital_number
-        else None
-    )
-    if patient is None:
-        name = form.get("patient_name", "").strip()
-        if not name:
-            raise ApiError(
-                422, "'patient_name' is required for a new patient.")
-        birth_year = form.get("birth_year", "").strip()
-        if birth_year and not birth_year.isdigit():
-            raise ApiError(422, "'birth_year' must be a number.")
-        patient = Patient(
-            hospital_number=hospital_number,
-            name=name,
-            sex=form.get("sex", "").strip() or None,
-            birth_year=int(birth_year) if birth_year else None,
-        )
-        db.session.add(patient)
+    from .upload import create_case
 
-    case = Case(patient=patient)
-    db.session.add(case)
-    db.session.flush()  # assigns case.id, which names the stored file
-    case.image_path = _save_png(image, case.id)
-    # Headless: run the model in this request so the doctor already sees
-    # the reading. Falls back to queued when models are missing (tests,
-    # or the worker drains it later).
-    case.predictions.append(Prediction(state=QUEUED))
-    audit(case, "created")
-    db.session.commit()
-    _run_model_inline(case.id)
-    case = db.session.get(Case, case.id)
+    case = create_case(upload, request.form)
     return jsonify(_summary(case)), 201
 
 

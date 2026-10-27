@@ -128,6 +128,10 @@ class FakeBackend {
     if (request.headers['Authorization'] != 'Bearer token-1') {
       return _json({'error': 'Missing bearer token.'}, 401);
     }
+    if (path == '/cases' && method == 'POST') {
+      cases[3] = caseJson(3, name: 'New Upload');
+      return _json(cases[3]!, 201);
+    }
     if (path == '/auth/me') {
       return _json({
         'id': role == 'admin' ? 1 : 2,
