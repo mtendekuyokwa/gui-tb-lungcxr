@@ -32,18 +32,14 @@ class AdminHeader extends StatelessWidget {
           builder: (context, constraints) {
             // The signed-in name is decoration; on narrow screens the
             // brand and the action buttons need the room more.
-            final wide =
-                constraints.maxWidth >= AppSizes.narrowBreakpoint;
+            final wide = constraints.maxWidth >= AppSizes.narrowBreakpoint;
             return Row(
               spacing: AppSizes.gap8,
               children: [
                 // Bounded so the brand name ellipsizes instead of pushing
                 // the buttons out.
                 const Expanded(
-                  child: Align(
-                    alignment: .centerLeft,
-                    child: AppBrand(),
-                  ),
+                  child: Align(alignment: .centerLeft, child: AppBrand()),
                 ),
                 if (wide)
                   Flexible(

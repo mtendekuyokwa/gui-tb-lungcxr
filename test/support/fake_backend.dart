@@ -142,6 +142,19 @@ class FakeBackend {
       });
     }
     if (path == '/catalog') return _json(_catalog);
+    if (path == '/patients') {
+      final query = request.url.queryParameters['q'] ?? '';
+      return _json([
+        if ('jane banda'.contains(query.toLowerCase()))
+          {
+            'id': 7,
+            'name': 'Jane Banda',
+            'hospital_number': 'HU-42',
+            'sex': 'female',
+            'birth_year': 1987,
+          },
+      ]);
+    }
     if (path == '/cases') return _json(cases.values.toList());
     if (path == '/admin/stats') {
       return _json({

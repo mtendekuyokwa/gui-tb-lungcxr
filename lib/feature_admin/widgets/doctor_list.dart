@@ -37,8 +37,7 @@ class _DoctorListState extends State<DoctorList> {
           children: [
             FCheckbox(
               value: _showInactive,
-              onChange: (_) =>
-                  setState(() => _showInactive = !_showInactive),
+              onChange: (_) => setState(() => _showInactive = !_showInactive),
             ),
             const SizedBox(width: AppSizes.gap8),
             Flexible(child: Text(Strings.showInactive, style: muted)),

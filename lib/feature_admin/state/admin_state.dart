@@ -59,6 +59,28 @@ class AdminState extends ChangeNotifier {
   AdminStats? get stats => _stats;
   bool get loading => _loading;
 
+  /// One line of a doctor's counts for the assign card: how much they
+  /// hold. Falls back to "0 open" when the stats panel failed to load.
+  String workloadOf(AppUser doctor) {
+    for (final w in _stats?.workload ?? const <DoctorWorkload>[]) {
+      if (w.fullName == doctor.fullName) {
+        return '${w.open} ${Strings.statsOpen} · '
+            '${w.submitted} ${Strings.statsSubmitted} · '
+            '${w.accepted} ${Strings.statsAccepted}';
+      }
+    }
+    return '0 ${Strings.statsOpen}';
+  }
+
+  /// The id of the doctor with [fullName], for chart taps that drill into
+  /// a doctor's cases; null when no such active doctor exists.
+  int? doctorIdOf(String fullName) {
+    for (final user in _allUsers) {
+      if (user.isDoctor && user.fullName == fullName) return user.id;
+    }
+    return null;
+  }
+
   /// True while an action is in flight; buttons disable themselves.
   bool get busy => _busy;
   String? get error => _error;
@@ -71,7 +93,7 @@ class AdminState extends ChangeNotifier {
   /// so the UI can say so instead of showing "awaiting" in silence.
   bool get waitingOnModel =>
       _cases.any((c) => c.prediction?.state == 'queued') ||
-      (_open?.prediction?.state == 'queued' ?? false);
+      (_open?.prediction?.state == 'queued');
 
   Future<void> load() => _guard(_reload);
 
@@ -154,6 +176,24 @@ class AdminState extends ChangeNotifier {
     notifyListeners();
   }
 
+  /// Adds every assignable case in [candidates] to the selection: the
+  /// select-all-shown action on a filtered case list.
+  void selectShown(Iterable<CxrCase> candidates) {
+    if (_busy) return;
+    _ticked.addAll([
+      for (final c in candidates)
+        if (c.status.assignable) c.id,
+    ]);
+    notifyListeners();
+  }
+
+  /// Empties the selection.
+  void clearTicked() {
+    if (_busy) return;
+    _ticked.clear();
+    notifyListeners();
+  }
+
   Future<void> openCase(int id) => _guard(() => _fetchOpen(id));
 
   String imageUrl(int id) => _api.imageUrl(id);
@@ -229,6 +269,9 @@ class AdminState extends ChangeNotifier {
     await _api.updateUser(id, active: active);
     await _reload();
   });
+
+  /// Runs the patient search behind the upload form's suggestions.
+  Future<List<AppPatient>> patients(String query) => _api.patients(query);
 
   Future<bool> upload({
     required String patientName,

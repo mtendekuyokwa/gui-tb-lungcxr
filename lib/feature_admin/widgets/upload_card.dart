@@ -5,34 +5,23 @@ import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_admin/state/admin_state.dart';
 import 'package:gui_lungcxr/feature_admin/utils/pick_xray.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/admin_section.dart';
+import 'package:gui_lungcxr/widgets/patient_fields.dart';
 import 'package:provider/provider.dart';
 
-/// Form for adding a case: patient details and the X-ray image.
+/// Form for adding a case: patient details (with return-visit suggestions)
+/// and the X-ray image.
 class UploadCard extends StatefulWidget {
-  const new({super.key});
+  const UploadCard({super.key});
 
   @override
   State<UploadCard> createState() => _UploadCardState();
 }
 
 class _UploadCardState extends State<UploadCard> {
-  final _name = TextEditingController();
-  final _number = TextEditingController();
+  String _name = '';
+  String _number = '';
   PlatformFile? _file;
-
-  @override
-  void initState() {
-    super.initState();
-    // The upload button depends on whether a name has been typed.
-    _name.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _number.dispose();
-    super.dispose();
-  }
+  int _attempt = 0; // re-keys the form to clear it after a successful upload
 
   Future<void> _choose() async {
     final file = await pickXray();
@@ -43,15 +32,18 @@ class _UploadCardState extends State<UploadCard> {
     final file = _file;
     if (file == null) return;
     final ok = await admin.upload(
-      patientName: _name.text,
-      hospitalNumber: _number.text,
+      patientName: _name,
+      hospitalNumber: _number,
       bytes: await file.readAsBytes(),
       filename: file.name,
     );
     if (!ok || !mounted) return;
-    _name.clear();
-    _number.clear();
-    setState(() => _file = null);
+    setState(() {
+      _name = '';
+      _number = '';
+      _file = null;
+      _attempt++;
+    });
     showFToast(
       context: context,
       icon: const Icon(FLucideIcons.circleCheck),
@@ -62,18 +54,18 @@ class _UploadCardState extends State<UploadCard> {
   @override
   Widget build(BuildContext context) {
     final admin = context.watch<AdminState>();
-    final ready = _file != null && _name.text.trim().isNotEmpty && !admin.busy;
+    final ready = _file != null && _name.trim().isNotEmpty && !admin.busy;
 
     return AdminSection(
       title: Strings.uploadCase,
       children: [
-        FTextField(
-          control: .managed(controller: _name),
-          hint: Strings.patientName,
-        ),
-        FTextField(
-          control: .managed(controller: _number),
-          hint: Strings.hospitalNumber,
+        PatientFields(
+          key: ValueKey(_attempt),
+          search: admin.patients,
+          onChanged: (name, number) => setState(() {
+            _name = name;
+            _number = number;
+          }),
         ),
         FButton(
           variant: .outline,
@@ -93,6 +85,13 @@ class _UploadCardState extends State<UploadCard> {
           prefix: const Icon(FLucideIcons.upload),
           child: const Text(Strings.upload),
         ),
+        if (admin.error case final error?)
+          Text(
+            error,
+            style: context.theme.typography.body.sm.copyWith(
+              color: context.theme.colors.destructive,
+            ),
+          ),
       ],
     );
   }
