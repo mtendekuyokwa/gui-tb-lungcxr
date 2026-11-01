@@ -59,6 +59,14 @@ class AdminApi {
     'role': role,
   });
 
+  /// Patients matching a name or hospital number, so a return visit reuses
+  /// the existing record instead of retyping it.
+  Future<List<AppPatient>> patients(String query) async {
+    final json =
+        await _client.get(Endpoints.patients, query: {'q': query}) as List;
+    return [for (final item in json) AppPatient.fromJson(item)];
+  }
+
   /// Activate or deactivate a user, rename them, or reset their password.
   /// Only non-null fields are sent.
   Future<AppUser> updateUser(
@@ -95,10 +103,7 @@ class AdminApi {
 
   /// The CSV text of an export, without patient name or hospital number.
   Future<String> exportCsv(String kind) async =>
-      (await _client.get(
-            Endpoints.adminExport,
-            query: {'kind': kind},
-          ))
+      (await _client.get(Endpoints.adminExport, query: {'kind': kind}))
           as String;
 
   /// Download URL for a CSV export. Fetched with [imageHeaders].

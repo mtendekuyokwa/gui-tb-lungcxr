@@ -363,6 +363,16 @@ class Catalog(Resource):
         """Get application catalog"""
 
 
+@api.route("/patients")
+class PatientsSearch(Resource):
+    @api.doc(description="Searches patients by name or hospital number so a returning patient's record can be reused on a new case.", params={"q": "Name or hospital number fragment, at least 2 characters"})
+    @api.response(200, "Matching patients", [patient_sub_model])
+    @api.response(401, "Not authenticated", error_model)
+    @api.param("q", "Name or hospital number fragment")
+    def get(self):
+        """Search patients (Doctor and Admin)"""
+
+
 @api.route("/cases")
 class CasesList(Resource):
     @api.doc(description="Returns cases assigned to the signed-in doctor.", params={"status": "Filter by case status"})

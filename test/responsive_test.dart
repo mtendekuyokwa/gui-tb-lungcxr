@@ -115,6 +115,10 @@ void main() {
 
     await tester.tap(_tab(Strings.manageTab));
     await tester.pump();
+    // The work rail opens on the case detail; intake is a tab over.
+    expect(find.text(Strings.detailTab), findsWidgets);
+    await tester.tap(find.text(Strings.intakeTab));
+    await tester.pump();
     expect(find.text(Strings.uploadCase), findsOneWidget);
     expect(find.text(Strings.assignTo), findsOneWidget);
 

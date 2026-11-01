@@ -4,7 +4,9 @@ import 'package:forui/forui.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_admin/state/admin_state.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/assign_card.dart';
+import 'package:gui_lungcxr/feature_admin/widgets/case_list.dart';
 import 'package:gui_lungcxr/feature_auth/state/session_state.dart';
+import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 import 'package:gui_lungcxr/feature_home/widgets/client_board.dart';
 import 'package:gui_lungcxr/feature_home/widgets/segment_panel.dart';
 import 'package:gui_lungcxr/main.dart';
@@ -170,7 +172,38 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
-  testWidgets('an admin sees all cases and can assign ticked ones', (
+  testWidgets('the upload form suggests returning patients', (tester) async {
+    final backend = FakeBackend();
+    final session = SessionState(api: backend.api);
+    addTearDown(session.dispose);
+    await tester.runAsync(() => session.login('doc@test', 'secret'));
+    await _pumpApp(tester, session);
+    await _settle(tester);
+
+    // The doctor's own upload starts collapsed behind a button.
+    await tester.tap(find.text(Strings.uploadCase));
+    await _settle(tester);
+
+
+    // Typing suggests existing patients; picking one fills both fields.
+    await tester.enterText(
+      find.byWidgetPredicate((w) => w is FAutocomplete),
+      'banda',
+    );
+    await _settle(tester);
+    expect(backend.log, contains('GET /patients?q=banda'));
+    expect(find.text('HU-42 · Female · born 1987'), findsOneWidget);
+    await tester.tap(
+      find.byWidgetPredicate((w) => w is FAutocompleteItem).first,
+    );
+    await _settle(tester);
+
+    expect(find.text('HU-42'), findsOneWidget); // number now auto-filled
+    expect(find.text(Strings.upload), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('an admin sees the dashboard and can assign ticked ones', (
     tester,
   ) async {
     final backend = FakeBackend(role: 'admin');
@@ -181,8 +214,14 @@ void main() {
     await _pumpApp(tester, session);
     await _settle(tester);
 
-    expect(find.text(Strings.uploadCase), findsOneWidget);
+    // The dashboard strip leads the workspace.
     expect(find.text(Strings.selectCase), findsOneWidget);
+    expect(find.text(Strings.statsAgreement), findsOneWidget);
+
+    // Intake is where new cases are added and ticks are handed over.
+    await tester.tap(find.text(Strings.intakeTab).last);
+    await tester.pump();
+    expect(find.text(Strings.uploadCase), findsOneWidget);
     expect(find.text('${Strings.assign} (0)'), findsOneWidget);
 
     final admin = tester
@@ -203,6 +242,56 @@ void main() {
     await _settle(tester);
     expect(backend.log, contains('POST /admin/cases/assign'));
     expect(admin.ticked, isEmpty);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('an admin searches the case list and filters cases', (
+    tester,
+  ) async {
+    final backend = FakeBackend(role: 'admin');
+    final session = SessionState(api: backend.api);
+    addTearDown(session.dispose);
+    await tester.runAsync(() => session.login('admin@test', 'secret'));
+    await _pumpApp(tester, session);
+    await _settle(tester);
+
+    expect(find.byType(CaseList), findsOneWidget);
+    await tester.enterText(find.byType(FTextField).first, 'nmware');
+    await tester.pump();
+    expect(find.text(Strings.noCasesMatch), findsOneWidget);
+    await tester.enterText(find.byType(FTextField).first, '');
+    await tester.pump();
+    expect(find.text(Strings.noCasesMatch), findsNothing);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('an admin filters the case list from the insights charts', (
+    tester,
+  ) async {
+    final backend = FakeBackend(role: 'admin');
+    final session = SessionState(api: backend.api);
+    addTearDown(session.dispose);
+    await tester.runAsync(() => session.login('admin@test', 'secret'));
+    await _pumpApp(tester, session);
+    await _settle(tester);
+
+    await tester.tap(find.text(Strings.insightsTab).last);
+    await tester.pump();
+
+    final admin = tester
+        .element(find.text(Strings.workloadQuestion))
+        .read<AdminState>();
+    expect(admin.statusFilter, isNull);
+
+    // The donut's legend rows are the charts' drilldown: tap the slice's
+    // label and the case list narrows; tap again to show everything.
+    await tester.tap(find.text('Assigned 2'));
+    await tester.pump();
+    expect(admin.statusFilter, CaseStatus.assigned);
+
+    await tester.tap(find.text('Assigned 2'));
+    await tester.pump();
+    expect(admin.statusFilter, isNull);
     await tester.pump(const Duration(seconds: 10));
   });
 

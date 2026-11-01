@@ -62,6 +62,31 @@ def test_admin_upload_still_creates_unassigned(client, admin):
     assert response.status_code == 201 and response.json["status"] == "unassigned"
 
 
+def test_patient_search_reuses_records(client, admin):
+    """Typing a returning patient reuses their row instead of retyping them."""
+    case1 = upload(client, admin, name="Alice Banda", hospital_number="HU-42")
+    case2 = upload(client, admin, name="Alice Banda", hospital_number="HU-42")
+    upload(client, admin, name="Zola Moyo")
+
+    # Same hospital number reuses the same patient row across cases.
+    detail1 = client.get(f"{API}/admin/cases/{case1}", headers=admin).json
+    detail2 = client.get(f"{API}/admin/cases/{case2}", headers=admin).json
+    assert detail1["patient"] == detail2["patient"]
+
+    # Matches by name...
+    by_name = client.get(f"{API}/patients?q=banda", headers=admin).json
+    assert [row["name"] for row in by_name] == ["Alice Banda"]
+    # ...and by hospital number. Zola has no number and does not match.
+    by_number = client.get(f"{API}/patients?q=hu-4", headers=admin).json
+    assert by_number == by_name
+    assert by_number[0]["hospital_number"] == "HU-42"
+
+    assert client.get(f"{API}/patients", headers=admin).json == []  # no query
+    too_short = client.get(f"{API}/patients?q=a", headers=admin).json
+    assert too_short == []
+    assert client.get(f"{API}/patients?q=al").status_code == 401
+
+
 # --- auth ---------------------------------------------------------------------
 
 

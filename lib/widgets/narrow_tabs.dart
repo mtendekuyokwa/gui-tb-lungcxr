@@ -4,7 +4,11 @@ import 'package:gui_lungcxr/constants/app_sizes.dart';
 
 /// One bottom tab of a narrow-screen layout.
 class NarrowTab {
-  const NarrowTab({required this.label, required this.icon, required this.page});
+  const NarrowTab({
+    required this.label,
+    required this.icon,
+    required this.page,
+  });
 
   final String label;
   final IconData icon;
@@ -40,9 +44,7 @@ class _NarrowTabsState extends State<NarrowTabs> {
         DecoratedBox(
           decoration: BoxDecoration(
             color: theme.colors.background,
-            border: Border(
-              top: BorderSide(color: theme.colors.border),
-            ),
+            border: Border(top: BorderSide(color: theme.colors.border)),
           ),
           child: Padding(
             padding: const .all(AppSizes.gap8),
@@ -57,10 +59,7 @@ class _NarrowTabsState extends State<NarrowTabs> {
                       onPress: () => setState(() => _index = i),
                       prefix: Icon(widget.tabs[i].icon),
                       child: Flexible(
-                        child: Text(
-                          widget.tabs[i].label,
-                          overflow: .ellipsis,
-                        ),
+                        child: Text(widget.tabs[i].label, overflow: .ellipsis),
                       ),
                     ),
                   ),

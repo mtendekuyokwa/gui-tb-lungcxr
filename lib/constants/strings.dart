@@ -137,6 +137,10 @@ class Strings {
       "Some readings are still with the model worker — keep 'flask worker' running.";
   static const uploadCase = "New case";
   static const patientName = "Patient name";
+  static const patientNameOrNumber =
+      "Patient name (or hospital number, to reuse a patient)";
+  static const patientReuse =
+      "Pick a suggestion to reuse that patient's record";
   static const hospitalNumber = "Hospital number (optional)";
   static const chooseImage = "Choose X-ray (PNG or JPEG)";
   static const upload = "Upload";
@@ -181,10 +185,13 @@ class Strings {
   static const dueDate = "Due date (optional)";
   static const clearDueDate = "Clear";
   static const stats = "Statistics";
+  static const dashboard = "Dashboard";
+  static const dashboardClear = "All clear";
   static const statsOpen = "Open";
   static const statsSubmitted = "Submitted";
   static const statsAccepted = "Accepted";
   static const statsAgreement = "Model agreement";
+  static const statsWaiting = "Readings waiting on the model";
   static const export = "Export";
   static const exportReviews = "Reviews CSV";
   static const exportFeedback = "Model feedback CSV";
@@ -194,6 +201,27 @@ class Strings {
   static const casesTab = "Cases";
   static const reviewTab = "Review";
   static const manageTab = "Manage";
+
+  // Admin dashboard
+  static const searchCases = "Search cases";
+  static const noCasesMatch = "No cases match this search";
+  static const moreFilters = "More filters";
+  static const fewerFilters = "Fewer filters";
+  static const selectAllShown = "Select all shown";
+  static const clearTicked = "Clear";
+  static const detailTab = "Case";
+  static const intakeTab = "Intake";
+  static const peopleTab = "People";
+  static const insightsTab = "Insights";
+  static const workloadQuestion = "Who holds the open work?";
+  static const queueQuestion = "Where is the queue piling up?";
+  static const chartTapDoctor = "Tap a doctor's bar to show only their cases";
+  static const chartTapStatus = "Tap a slice to filter the case list";
+  static const chartsTopDoctors = "Showing the 8 busiest doctors";
+  static const statsDeferred =
+      "Statistics are unavailable right now — the stats endpoint failed. "
+      "The case list below still works; try Refresh.";
+  static const dashboardFilterOn = "Filtering";
 
   static const String somethingWentWrong =
       "Something Went Wrong. Please try again later.";

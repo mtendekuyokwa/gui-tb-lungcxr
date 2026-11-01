@@ -24,14 +24,21 @@ class CaseRow extends StatelessWidget {
 
     return DecoratedBox(
       decoration: BoxDecoration(
-        color: isOpen ? theme.colors.secondary : theme.colors.background,
-        border: .all(color: theme.colors.border),
+        color: isOpen
+            ? theme.colors.primary.withValues(alpha: 0.06)
+            : ticked
+            ? theme.colors.muted.withValues(alpha: 0.5)
+            : theme.colors.card,
+        border: Border.all(
+          color: isOpen ? theme.colors.primary : theme.colors.border,
+          width: isOpen ? 1.5 : 1,
+        ),
         borderRadius: .circular(AppSizes.radius8),
       ),
       child: Padding(
         padding: const .symmetric(
           horizontal: AppSizes.gap8,
-          vertical: AppSizes.gap6,
+          vertical: AppSizes.gap8,
         ),
         child: Row(
           spacing: AppSizes.gap10,
@@ -45,6 +52,7 @@ class CaseRow extends StatelessWidget {
                   : null,
               child: Icon(
                 ticked ? FLucideIcons.squareCheck : FLucideIcons.square,
+                color: ticked ? theme.colors.primary : null,
               ),
             ),
             // Only the case itself opens the detail: ticking must not.

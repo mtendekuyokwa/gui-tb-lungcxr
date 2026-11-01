@@ -13,6 +13,7 @@ class Endpoints {
 
   // Doctor
   static const String cases = '/cases';
+  static const String patients = '/patients';
   static String caseDetail(int id) => '/cases/$id';
   static String caseImage(int id) => '/cases/$id/image';
   static String caseOverlay(int id) => '/cases/$id/overlay';

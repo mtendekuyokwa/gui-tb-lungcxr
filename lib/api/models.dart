@@ -74,13 +74,69 @@ class Catalog {
   );
 }
 
+/// A reusable patient record from `GET /patients`.
+class AppPatient {
+  const AppPatient({
+    required this.id,
+    required this.name,
+    this.hospitalNumber,
+    this.sex,
+    this.birthYear,
+  });
+
+  final int id;
+  final String name;
+  final String? hospitalNumber;
+  final String? sex;
+  final int? birthYear;
+
+  /// One-line detail for a suggestion row: "HU-42 · Male · born 1987".
+  String get detail => [
+    if (hospitalNumber case final number?) number,
+    if (sex case final value? when value.isNotEmpty)
+      '${value[0].toUpperCase()}${value.substring(1)}',
+    if (birthYear case final year?) 'born $year',
+  ].join(' · ');
+
+  static AppPatient fromJson(Map<String, dynamic> json) => AppPatient(
+    id: json['id'] as int,
+    name: json['name'] as String,
+    hospitalNumber: json['hospital_number'] as String?,
+    sex: json['sex'] as String?,
+    birthYear: (json['birth_year'] as num?)?.toInt(),
+  );
+}
+
+/// One doctor's open work from `GET /admin/stats`, for the dashboard.
+class DoctorWorkload {
+  const DoctorWorkload({
+    required this.fullName,
+    required this.open,
+    required this.submitted,
+    required this.accepted,
+  });
+
+  final String fullName;
+  final int open;
+  final int submitted;
+  final int accepted;
+
+  static DoctorWorkload fromJson(Map<String, dynamic> json) => DoctorWorkload(
+    fullName: (json['doctor'] as Map<String, dynamic>)['full_name'] as String,
+    open: ((json['open'] as num?) ?? 0).toInt(),
+    submitted: ((json['submitted'] as num?) ?? 0).toInt(),
+    accepted: ((json['accepted'] as num?) ?? 0).toInt(),
+  );
+}
+
 /// Counts the admin's statistics screen shows, from `GET /admin/stats`.
 class AdminStats {
-  const new({
+  const AdminStats({
     this.byStatus = const {},
     this.open = 0,
     this.submitted = 0,
     this.accepted = 0,
+    this.workload = const [],
     this.compared = 0,
     this.agreed = 0,
     this.rate,
@@ -90,6 +146,9 @@ class AdminStats {
   final int open;
   final int submitted;
   final int accepted;
+
+  /// Per-doctor rows behind the totals, shown on the dashboard.
+  final List<DoctorWorkload> workload;
   final int compared;
   final int agreed;
   final double? rate;
@@ -102,12 +161,13 @@ class AdminStats {
     var open = 0;
     var submitted = 0;
     var accepted = 0;
-    // Per-doctor workload rows are not shown yet; only the totals matter.
+    final workload = <DoctorWorkload>[];
     for (final row in json['doctors'] as List? ?? const []) {
       final map = row as Map<String, dynamic>;
-      open += ((map['open'] as num?) ?? 0).toInt();
-      submitted += ((map['submitted'] as num?) ?? 0).toInt();
-      accepted += ((map['accepted'] as num?) ?? 0).toInt();
+      workload.add(DoctorWorkload.fromJson(map));
+      open += (map['open'] as num?)?.toInt() ?? 0;
+      submitted += (map['submitted'] as num?)?.toInt() ?? 0;
+      accepted += (map['accepted'] as num?)?.toInt() ?? 0;
     }
     final agreement = json['model_agreement'] as Map<String, dynamic>;
     return AdminStats(
@@ -115,6 +175,7 @@ class AdminStats {
       open: open,
       submitted: submitted,
       accepted: accepted,
+      workload: workload,
       compared: ((agreement['compared'] as num?) ?? 0).toInt(),
       agreed: ((agreement['agreed'] as num?) ?? 0).toInt(),
       rate: (agreement['rate'] as num?)?.toDouble(),

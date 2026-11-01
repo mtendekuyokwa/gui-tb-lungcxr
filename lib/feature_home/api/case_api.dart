@@ -1,6 +1,7 @@
 import 'dart:typed_data';
 
 import 'package:gui_lungcxr/api/api_client.dart';
+import 'package:gui_lungcxr/api/models.dart';
 import 'package:gui_lungcxr/constants/endpoints.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 import 'package:gui_lungcxr/feature_home/models/review_draft.dart';
@@ -36,6 +37,14 @@ class CaseApi {
   /// One case with its review; fetching it marks it as opened.
   Future<CxrCase> caseDetail(int id) async =>
       CxrCase.fromJson(await _client.get(Endpoints.caseDetail(id)));
+
+  /// Patients matching a name or hospital number, so a return visit reuses
+  /// the existing record instead of retyping it.
+  Future<List<AppPatient>> patients(String query) async {
+    final json = await _client.get(Endpoints.patients, query: {'q': query})
+        as List;
+    return [for (final item in json) AppPatient.fromJson(item)];
+  }
 
   /// Replaces the saved draft and returns the case as it now stands.
   Future<CxrCase> saveReview(int id, ReviewDraft draft) async =>

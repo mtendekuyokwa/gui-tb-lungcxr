@@ -85,4 +85,30 @@ class AppSizes {
 
   /// Height of the X-ray preview in the case detail card.
   static const double casePreviewHeight = 200;
+
+  // Admin dashboard
+  /// Height of the icon box in a dashboard stat tile.
+  static const double statIconBox = 28;
+
+  /// Width of one dashboard stat tile on a narrow screen.
+  static const double adminTileWidth = 148;
+
+  /// Width of the strip's health card on a wide screen.
+  static const double adminHealthCardWidth = 160;
+
+  /// Height of the workload bar chart in the insights cards.
+  static const double chartBarHeight = 190;
+
+  /// Height of the status donut in the insights cards.
+  static const double chartDonutHeight = 160;
+
+  /// Slice thickness of the status donut.
+  static const double chartDonutRadius = 26;
+
+  /// Center hole of the status donut.
+  static const double chartDonutHole = 34;
+
+  /// Doctors the workload chart shows before truncating to keep the axis
+  /// readable.
+  static const int chartMaxDoctors = 8;
 }

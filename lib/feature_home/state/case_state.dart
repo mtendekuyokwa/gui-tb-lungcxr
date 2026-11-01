@@ -2,6 +2,7 @@ import 'dart:async';
 
 import 'package:flutter/foundation.dart';
 import 'package:gui_lungcxr/api/api_client.dart';
+import 'package:gui_lungcxr/api/models.dart';
 import 'package:gui_lungcxr/feature_home/api/case_api.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 import 'package:gui_lungcxr/feature_home/state/chat_state.dart';
@@ -148,6 +149,9 @@ class CaseState extends ChangeNotifier {
   String imageUrl(int id) => _api.imageUrl(id);
   String overlayUrl(int id) => _api.overlayUrl(id);
   String maskUrl(int id) => _api.maskUrl(id);
+
+  /// Runs the patient search behind the upload form's suggestions.
+  Future<List<AppPatient>> patients(String query) => _api.patients(query);
 
   /// Headers the image widgets need to load [imageUrl] and [overlayUrl].
   Map<String, String> get imageHeaders => _api.imageHeaders;

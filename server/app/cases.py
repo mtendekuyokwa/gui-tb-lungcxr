@@ -22,6 +22,7 @@ from .models import (
     Mark,
     MaskEdit,
     ModelFeedback,
+    Patient,
     Review,
     TestRequest,
     now,
@@ -83,6 +84,30 @@ def create_case():
         note=f"self-uploaded by {g.user.full_name}",
     )
     return jsonify(_detail(case)), 201
+
+
+@bp.get("/patients")
+@login_required()
+def search_patients():
+    """Patient lookup (name or hospital number) so a returning patient can be
+    reused instead of retyped. Both admins and doctors upload cases, so both
+    may search."""
+    query = (request.args.get("q") or "").strip()
+    if len(query) < 2:
+        return jsonify([])
+    pattern = f"%{query}%"
+    matches = (
+        Patient.query.filter(
+            db.or_(
+                Patient.name.ilike(pattern),
+                Patient.hospital_number.ilike(pattern),
+            )
+        )
+        .order_by(Patient.name)
+        .limit(8)
+        .all()
+    )
+    return jsonify([p.to_dict() for p in matches])
 
 
 @bp.get("/cases")

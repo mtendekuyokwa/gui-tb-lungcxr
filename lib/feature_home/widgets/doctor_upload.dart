@@ -5,12 +5,18 @@ import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_admin/utils/pick_xray.dart';
 import 'package:gui_lungcxr/feature_home/state/case_state.dart';
+import 'package:gui_lungcxr/widgets/patient_fields.dart';
 import 'package:provider/provider.dart';
 
-/// The doctor's own upload: patient details and the X-ray image. Hidden
-/// behind a button so the case list stays small; collapses after success.
+/// The doctor's own upload: patient details (with return-visit suggestions)
+/// and the X-ray image. Hidden behind a button so the case list stays small;
+/// collapses after success.
 class DoctorUpload extends StatefulWidget {
-  const new({required this.open, required this.onToggle, super.key});
+  const DoctorUpload({
+    required this.open,
+    required this.onToggle,
+    super.key,
+  });
 
   final bool open;
   final VoidCallback onToggle;
@@ -20,23 +26,10 @@ class DoctorUpload extends StatefulWidget {
 }
 
 class _DoctorUploadState extends State<DoctorUpload> {
-  final _name = TextEditingController();
-  final _number = TextEditingController();
+  String _name = '';
+  String _number = '';
   PlatformFile? _file;
-
-  @override
-  void initState() {
-    super.initState();
-    // The upload button depends on whether a name has been typed.
-    _name.addListener(() => setState(() {}));
-  }
-
-  @override
-  void dispose() {
-    _name.dispose();
-    _number.dispose();
-    super.dispose();
-  }
+  int _attempt = 0; // re-keys the form to clear it after a successful upload
 
   Future<void> _choose() async {
     final file = await pickXray();
@@ -47,17 +40,20 @@ class _DoctorUploadState extends State<DoctorUpload> {
     final file = _file;
     if (file == null) return;
     final ok = await state.upload(
-      patientName: _name.text,
-      hospitalNumber: _number.text,
+      patientName: _name,
+      hospitalNumber: _number,
       bytes: await file.readAsBytes(),
       filename: file.name,
     );
     if (!ok) return;
-    _name.clear();
-    _number.clear();
+    _name = '';
+    _number = '';
     widget.onToggle(); // collapse the form again
     if (mounted) {
-      setState(() => _file = null);
+      setState(() {
+        _file = null;
+        _attempt++;
+      });
       showFToast(
         context: context,
         icon: const Icon(FLucideIcons.circleCheck),
@@ -69,7 +65,7 @@ class _DoctorUploadState extends State<DoctorUpload> {
   @override
   Widget build(BuildContext context) {
     final state = context.watch<CaseState>();
-    final ready = _file != null && _name.text.trim().isNotEmpty && !state.busy;
+    final ready = _file != null && _name.trim().isNotEmpty && !state.busy;
 
     if (!widget.open) {
       return FButton(
@@ -85,13 +81,13 @@ class _DoctorUploadState extends State<DoctorUpload> {
       crossAxisAlignment: .stretch,
       spacing: AppSizes.gap8,
       children: [
-        FTextField(
-          control: .managed(controller: _name),
-          hint: Strings.patientName,
-        ),
-        FTextField(
-          control: .managed(controller: _number),
-          hint: Strings.hospitalNumber,
+        PatientFields(
+          key: ValueKey(_attempt),
+          search: state.patients,
+          onChanged: (name, number) => setState(() {
+            _name = name;
+            _number = number;
+          }),
         ),
         FButton(
           variant: .outline,
