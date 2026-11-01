@@ -16,11 +16,21 @@ class NarrowTab {
 }
 
 /// Single-column layout for screens under [AppSizes.narrowBreakpoint]:
-/// the selected page on top, a tab bar pinned to the bottom.
+/// the selected page on top, a tab bar pinned to the bottom. Either owned
+/// (it remembers the index itself) or controlled: when [index] is given,
+/// [onChanged] must report every tab press so a parent can, say, move the
+/// admin from the dashboard tiles to the case list.
 class NarrowTabs extends StatefulWidget {
-  const new({required this.tabs, super.key});
+  const new({required this.tabs, this.index, this.onChanged, super.key});
 
   final List<NarrowTab> tabs;
+
+  /// The selected tab when the parent controls it; null when NarrowTabs
+  /// keeps its own.
+  final int? index;
+
+  /// Called on every tab press in controlled mode.
+  final ValueChanged<int>? onChanged;
 
   @override
   State<NarrowTabs> createState() => _NarrowTabsState();
@@ -28,6 +38,18 @@ class NarrowTabs extends StatefulWidget {
 
 class _NarrowTabsState extends State<NarrowTabs> {
   var _index = 0;
+
+  bool get _controlled => widget.index != null;
+
+  int get _current => _controlled ? widget.index! : _index;
+
+  void _select(int i) {
+    if (_controlled) {
+      widget.onChanged?.call(i);
+      return;
+    }
+    setState(() => _index = i);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -37,7 +59,7 @@ class _NarrowTabsState extends State<NarrowTabs> {
       children: [
         Expanded(
           child: IndexedStack(
-            index: _index,
+            index: _current,
             children: [for (final tab in widget.tabs) tab.page],
           ),
         ),
@@ -54,9 +76,9 @@ class _NarrowTabsState extends State<NarrowTabs> {
                 for (var i = 0; i < widget.tabs.length; i++)
                   Expanded(
                     child: FButton(
-                      variant: _index == i ? .secondary : .ghost,
+                      variant: _current == i ? .secondary : .ghost,
                       size: .sm,
-                      onPress: () => setState(() => _index = i),
+                      onPress: () => _select(i),
                       prefix: Icon(widget.tabs[i].icon),
                       child: Flexible(
                         child: Text(widget.tabs[i].label, overflow: .ellipsis),

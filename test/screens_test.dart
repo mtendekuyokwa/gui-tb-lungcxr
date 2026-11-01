@@ -214,12 +214,17 @@ void main() {
     await _pumpApp(tester, session);
     await _settle(tester);
 
-    // The dashboard strip leads the workspace.
-    expect(find.text(Strings.selectCase), findsOneWidget);
+    // The overview leads the workspace; the queue is one page over.
+    expect(find.text(Strings.selectCase), findsNothing);
     expect(find.text(Strings.statsAgreement), findsOneWidget);
 
+    // Case management is its own page, reached from the sidebar.
+    await tester.tap(find.textContaining(Strings.cases).first);
+    await tester.pump();
+    expect(find.text(Strings.selectCase), findsOneWidget);
+
     // Intake is where new cases are added and ticks are handed over.
-    await tester.tap(find.text(Strings.intakeTab).last);
+    await tester.tap(find.text(Strings.intakeTab));
     await tester.pump();
     expect(find.text(Strings.uploadCase), findsOneWidget);
     expect(find.text('${Strings.assign} (0)'), findsOneWidget);
@@ -255,6 +260,9 @@ void main() {
     await _pumpApp(tester, session);
     await _settle(tester);
 
+    // Case management is its own page, reached from the sidebar.
+    await tester.tap(find.textContaining(Strings.cases).first);
+    await tester.pump();
     expect(find.byType(CaseList), findsOneWidget);
     await tester.enterText(find.byType(FTextField).first, 'nmware');
     await tester.pump();
@@ -265,7 +273,7 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
-  testWidgets('an admin filters the case list from the insights charts', (
+  testWidgets('an admin drills into the case list from the charts', (
     tester,
   ) async {
     final backend = FakeBackend(role: 'admin');
@@ -275,20 +283,21 @@ void main() {
     await _pumpApp(tester, session);
     await _settle(tester);
 
-    await tester.tap(find.text(Strings.insightsTab).last);
-    await tester.pump();
-
     final admin = tester
         .element(find.text(Strings.workloadQuestion))
         .read<AdminState>();
     expect(admin.statusFilter, isNull);
 
     // The donut's legend rows are the charts' drilldown: tap the slice's
-    // label and the case list narrows; tap again to show everything.
+    // label and the overview hands the admin over to the filtered queue.
     await tester.tap(find.text('Assigned 2'));
     await tester.pump();
     expect(admin.statusFilter, CaseStatus.assigned);
+    expect(find.byType(CaseList), findsOneWidget);
 
+    // Back on the overview, tap again to show every case.
+    await tester.tap(find.text(Strings.dashboard).last);
+    await tester.pump();
     await tester.tap(find.text('Assigned 2'));
     await tester.pump();
     expect(admin.statusFilter, isNull);
@@ -306,6 +315,9 @@ void main() {
     await _pumpApp(tester, session);
     await _settle(tester);
 
+    // The queue lives on its own page now, reached from the sidebar.
+    await tester.tap(find.textContaining(Strings.cases).first);
+    await tester.pump();
     expect(find.text(Strings.waitingOnModel), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
   });

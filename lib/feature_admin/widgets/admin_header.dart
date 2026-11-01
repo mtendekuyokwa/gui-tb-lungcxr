@@ -7,10 +7,13 @@ import 'package:gui_lungcxr/feature_auth/state/session_state.dart';
 import 'package:gui_lungcxr/widgets/app_brand.dart';
 import 'package:provider/provider.dart';
 
-/// Top bar of the admin workspace: app name, who is signed in, refresh and
-/// sign-out.
+/// Top bar of the admin workspace: the current page's name, who is signed
+/// in, refresh and sign-out. The brand lives in the sidebar on wide
+/// screens; on narrow ones there is no sidebar, so the brand leads.
 class AdminHeader extends StatelessWidget {
-  const new({super.key});
+  const new({required this.title, super.key});
+
+  final String title;
 
   @override
   Widget build(BuildContext context) {
@@ -36,10 +39,23 @@ class AdminHeader extends StatelessWidget {
             return Row(
               spacing: AppSizes.gap8,
               children: [
-                // Bounded so the brand name ellipsizes instead of pushing
-                // the buttons out.
-                const Expanded(
-                  child: Align(alignment: .centerLeft, child: AppBrand()),
+                // Bounded so a long page name ellipsizes instead of
+                // pushing the buttons out.
+                Expanded(
+                  child:
+                      (wide)
+                          ? Text(
+                            title,
+                            maxLines: 1,
+                            overflow: .ellipsis,
+                            style: theme.typography.body.md.copyWith(
+                              fontWeight: .w600,
+                            ),
+                          )
+                          : const Align(
+                            alignment: .centerLeft,
+                            child: AppBrand(),
+                          ),
                 ),
                 if (wide)
                   Flexible(
