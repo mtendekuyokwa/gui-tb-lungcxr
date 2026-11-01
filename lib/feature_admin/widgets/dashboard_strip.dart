@@ -11,9 +11,15 @@ import 'package:provider/provider.dart';
 /// The admin's dashboard as a strip of headline numbers: how many cases sit
 /// in each state that needs a decision, and how well the model matched the
 /// doctors. Tapping a state tile filters the case list to it; tapping the
-/// one already filtered clears it and shows every case again.
+/// one already filtered shows every case again. [onOpen] moves the admin
+/// onward from the dashboard to the page where the filtering happens.
 class DashboardStrip extends StatelessWidget {
-  const new({super.key});
+  const new({this.onOpen, super.key});
+
+  /// Called on every state-tile tap, after the filter is applied. Null
+  /// when the tiles are being read on the page that already shows the
+  /// case list.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -49,11 +55,7 @@ class DashboardStrip extends StatelessWidget {
         icon: FLucideIcons.inbox,
         accent: colors.primary,
         active: admin.statusFilter == CaseStatus.unassigned,
-        onTap: () => admin.setStatusFilter(
-          admin.statusFilter == CaseStatus.unassigned
-              ? null
-              : CaseStatus.unassigned,
-        ),
+        onTap: _filter(context, CaseStatus.unassigned),
       ),
       _StatTile(
         label: Strings.statusSubmitted,
@@ -61,11 +63,7 @@ class DashboardStrip extends StatelessWidget {
         icon: FLucideIcons.sendHorizontal,
         accent: AppColors.statWarning,
         active: admin.statusFilter == CaseStatus.submitted,
-        onTap: () => admin.setStatusFilter(
-          admin.statusFilter == CaseStatus.submitted
-              ? null
-              : CaseStatus.submitted,
-        ),
+        onTap: _filter(context, CaseStatus.submitted),
       ),
       _StatTile(
         label: Strings.statusReturned,
@@ -73,11 +71,7 @@ class DashboardStrip extends StatelessWidget {
         icon: FLucideIcons.undo2,
         accent: colors.destructive,
         active: admin.statusFilter == CaseStatus.returned,
-        onTap: () => admin.setStatusFilter(
-          admin.statusFilter == CaseStatus.returned
-              ? null
-              : CaseStatus.returned,
-        ),
+        onTap: _filter(context, CaseStatus.returned),
       ),
       _StatTile(
         label: Strings.statusAccepted,
@@ -85,11 +79,7 @@ class DashboardStrip extends StatelessWidget {
         icon: FLucideIcons.checkCheck,
         accent: AppColors.statDone,
         active: admin.statusFilter == CaseStatus.accepted,
-        onTap: () => admin.setStatusFilter(
-          admin.statusFilter == CaseStatus.accepted
-              ? null
-              : CaseStatus.accepted,
-        ),
+        onTap: _filter(context, CaseStatus.accepted),
       ),
       _StatTile(
         label: Strings.statsAgreement,
@@ -132,6 +122,15 @@ class DashboardStrip extends StatelessWidget {
       },
     );
   }
+
+  /// Filter the case list to [status], or back to every case when it is
+  /// already the one filtered, then hand the admin over to where that
+  /// filter takes effect.
+  VoidCallback _filter(BuildContext context, CaseStatus status) => () {
+    final admin = context.read<AdminState>();
+    admin.setStatusFilter(admin.statusFilter == status ? null : status);
+    onOpen?.call();
+  };
 }
 
 /// One number the admin reads at a glance: what it counts, its icon in the

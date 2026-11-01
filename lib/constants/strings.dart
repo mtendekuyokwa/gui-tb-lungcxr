@@ -209,9 +209,10 @@ class Strings {
   static const fewerFilters = "Fewer filters";
   static const selectAllShown = "Select all shown";
   static const clearTicked = "Clear";
+  static const adminNav = "Workspace";
+  static const teamTab = "Team";
   static const detailTab = "Case";
   static const intakeTab = "Intake";
-  static const peopleTab = "People";
   static const insightsTab = "Insights";
   static const workloadQuestion = "Who holds the open work?";
   static const queueQuestion = "Where is the queue piling up?";

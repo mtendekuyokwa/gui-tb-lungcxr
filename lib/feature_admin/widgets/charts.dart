@@ -12,10 +12,15 @@ import 'package:provider/provider.dart';
 
 /// The admin's charts, kept actionable: every panel answers a question and
 /// tapping it narrows the case list — overview narrows into the queue's
-/// drilldown. When the stats panel cannot load, the graphs are replaced by
-/// a note saying so instead of silently vanishing.
+/// drilldown. [onOpen] moves the admin from the dashboard to the page where
+/// that filter takes effect. When the stats panel cannot load, the graphs
+/// are replaced by a note saying so instead of silently vanishing.
 class AdminCharts extends StatelessWidget {
-  const AdminCharts({super.key});
+  const AdminCharts({this.onOpen, super.key});
+
+  /// Called after every drilldown tap. Null when the charts sit beside the
+  /// case list already.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -24,7 +29,10 @@ class AdminCharts extends StatelessWidget {
     return Column(
       crossAxisAlignment: .stretch,
       spacing: AppSizes.gap12,
-      children: [const WorkloadChart(), const StatusChart()],
+      children: [
+        WorkloadChart(onOpen: onOpen),
+        StatusChart(onOpen: onOpen),
+      ],
     );
   }
 }
@@ -59,7 +67,11 @@ class _DeferredNote extends StatelessWidget {
 /// Bars are capped to the 8 busiest doctors — an unbounded axis shows
 /// nothing readable.
 class WorkloadChart extends StatelessWidget {
-  const WorkloadChart({super.key});
+  const WorkloadChart({this.onOpen, super.key});
+
+  /// Called after a bar tap drills the case list down, so the dashboard
+  /// can hand the admin over to the filtered queue.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -122,6 +134,7 @@ class WorkloadChart extends StatelessWidget {
                       final id = admin.doctorIdOf(doctors[group].fullName);
                       if (id == null) return;
                       admin.setDoctorFilter(filterId == id ? null : id);
+                      onOpen?.call();
                     },
                   ),
                   titlesData: FlTitlesData(
@@ -236,7 +249,11 @@ class WorkloadChart extends StatelessWidget {
 /// slices carry no meaning. Each slice, and its legend row, filters the
 /// case list to that status; the filtered slice swells to mark itself.
 class StatusChart extends StatelessWidget {
-  const StatusChart({super.key});
+  const StatusChart({this.onOpen, super.key});
+
+  /// Called after a slice or legend tap drills the case list down, so the
+  /// dashboard can hand the admin over to the filtered queue.
+  final VoidCallback? onOpen;
 
   @override
   Widget build(BuildContext context) {
@@ -332,6 +349,7 @@ class StatusChart extends StatelessWidget {
                         admin.setStatusFilter(
                           admin.statusFilter == status ? null : status,
                         );
+                        onOpen?.call();
                       },
                     ),
                   ),
@@ -347,9 +365,12 @@ class StatusChart extends StatelessWidget {
                       value: value,
                       color: color,
                       active: admin.statusFilter == status,
-                      onTap: () => admin.setStatusFilter(
-                        admin.statusFilter == status ? null : status,
-                      ),
+                      onTap: () {
+                        admin.setStatusFilter(
+                          admin.statusFilter == status ? null : status,
+                        );
+                        onOpen?.call();
+                      },
                     ),
                 ],
               ),

@@ -102,7 +102,9 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
-  testWidgets('a narrow admin screen tabs cases and manage', (tester) async {
+  testWidgets('a narrow admin screen splits the workspace into pages', (
+    tester,
+  ) async {
     final backend = FakeBackend(role: 'admin');
     final session = SessionState(api: backend.api);
     addTearDown(session.dispose);
@@ -110,19 +112,22 @@ void main() {
     await _pumpApp(tester, session, const Size(400, 900));
     await _settle(tester);
 
+    // One page per concern: overview, queue, team, exports.
+    expect(_tab(Strings.dashboard), findsOneWidget);
     expect(_tab(Strings.casesTab), findsOneWidget);
-    expect(_tab(Strings.manageTab), findsOneWidget);
+    expect(_tab(Strings.teamTab), findsOneWidget);
+    expect(_tab(Strings.export), findsOneWidget);
 
-    await tester.tap(_tab(Strings.manageTab));
+    await tester.tap(_tab(Strings.casesTab));
     await tester.pump();
-    // The work rail opens on the case detail; intake is a tab over.
+    // The queue leads; the opened case and intake are sub-tabs.
     expect(find.text(Strings.detailTab), findsWidgets);
     await tester.tap(find.text(Strings.intakeTab));
     await tester.pump();
     expect(find.text(Strings.uploadCase), findsOneWidget);
     expect(find.text(Strings.assignTo), findsOneWidget);
 
-    await tester.tap(_tab(Strings.casesTab));
+    await tester.tap(_tab(Strings.dashboard));
     await tester.pump();
     expect(find.text(Strings.uploadCase), findsNothing);
     await tester.pump(const Duration(seconds: 10));

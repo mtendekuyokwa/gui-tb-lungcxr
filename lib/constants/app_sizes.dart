@@ -76,6 +76,7 @@ class AppSizes {
   // Admin workspace
   /// Width of the upload / assign / case detail column.
   static const double adminPanelWidth = 380;
+  static const double adminPageMaxWidth = 720;
 
   /// Below this width the workspaces switch to a single-column tab layout.
   static const double narrowBreakpoint = 700;

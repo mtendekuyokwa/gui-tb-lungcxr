@@ -4,18 +4,13 @@ import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_admin/state/admin_state.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/case_detail_card.dart';
-import 'package:gui_lungcxr/feature_admin/widgets/doctor_list.dart';
-import 'package:gui_lungcxr/feature_admin/widgets/export_card.dart';
-import 'package:gui_lungcxr/feature_admin/widgets/new_user.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/upload_card.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/assign_card.dart';
-import 'package:gui_lungcxr/feature_admin/widgets/charts.dart';
 import 'package:provider/provider.dart';
 
-/// The admin's work rail beside the case list. Four tabs, so no card sits
-/// out of sight under a pile of others: the opened case, intake (add a
-/// case, then hand ticked ones to a doctor), people (workload and user
-/// management) and exports.
+/// The rail beside the case list on the Cases page: the opened case and
+/// intake (add a case, then hand ticked ones to a doctor). Team and export
+/// live on their own pages, reached from the sidebar.
 class AdminWorkbench extends StatelessWidget {
   const AdminWorkbench({super.key});
 
@@ -32,18 +27,6 @@ class AdminWorkbench extends StatelessWidget {
         FTabEntry(
           label: Text(Strings.intakeTab),
           child: _page([const UploadCard(), const AssignCard()]),
-        ),
-        FTabEntry(
-          label: Text(Strings.peopleTab),
-          child: _page([const NewUser(), const DoctorList()]),
-        ),
-        FTabEntry(
-          label: Text(Strings.insightsTab),
-          child: _page([const AdminCharts()]),
-        ),
-        FTabEntry(
-          label: Text(Strings.export),
-          child: _page([const ExportCard()]),
         ),
       ],
     );
