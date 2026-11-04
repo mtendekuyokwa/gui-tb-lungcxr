@@ -141,3 +141,14 @@ def prepare(app, log=_log):
         fetch_models(app.config["MODELS_DIR"], log)
     except Exception as error:  # noqa: BLE001 - keep serving without the model
         log(f"fetch-models failed ({error}); starting without the model.")
+
+
+def create_ready_app(log=_log):
+    """The app with every boot step done: what `gunicorn main:app` serves,
+    from the repo root (main.py) or from server/ (server/main.py)."""
+    ensure_secret()  # before create_app, which reads LUNGCXR_SECRET_KEY
+    from . import create_app
+
+    app = create_app()
+    prepare(app, log)
+    return app

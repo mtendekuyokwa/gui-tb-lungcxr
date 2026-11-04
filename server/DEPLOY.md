@@ -12,11 +12,17 @@ anything still queued.
 
 The repo root holds what such hosts look for:
 
-- `requirements.txt`: CPU-only PyTorch, then `server/requirements.txt`.
+- `requirements.txt`: just `-r server/requirements.txt` (which pins CPU-only PyTorch).
 - `main.py`: puts `server/` on the import path, runs the boot steps, exposes `app`.
 - `gunicorn.conf.py`: read automatically by gunicorn from the working
-  directory: 1 process with 4 threads, 180 s timeout (uploads are read by the
-  model inside the request), app preloaded so the boot steps run once.
+  directory; loads `server/gunicorn.conf.py`: 1 process with 4 threads (`gthread`),
+  180 s timeout (uploads are read by the model inside the request), app
+  preloaded so the boot steps run once.
+
+`server/` has its own `main.py` and `gunicorn.conf.py`, so it also works when
+the host's root/working directory is set to `server/`. Either way the log
+must say `Using worker: gthread`; `sync` means gunicorn is not running in
+either folder (wrong branch, wrong directory, or an old checkout).
 
 Set these as environment / startup variables if the host has them (all optional):
 
