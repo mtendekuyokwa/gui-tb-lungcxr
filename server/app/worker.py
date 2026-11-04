@@ -1,6 +1,7 @@
 """Background worker: turns `queued` predictions into model readings."""
 
 import pathlib
+import threading
 import time
 
 from flask import current_app
@@ -31,11 +32,23 @@ def process_queued(pipeline, limit=None, case_id=None):
             break
         case = db.session.get(Case, prediction.case_id)
         assert case is not None
+        edited = prediction.input_mask_path
+        if edited:
+            # The doctor's corrected mask stays viewable (and editable) even
+            # if the classifier then fails on it.
+            prediction.mask_path = edited
         try:
-            reading = pipeline.read(storage / case.image_path)
-            mask_path = f"masks/{case.id}.png"
+            if edited:
+                reading = pipeline.read(
+                    storage / case.image_path, mask_path=storage / edited)
+            else:
+                reading = pipeline.read(storage / case.image_path)
+            mask_path = edited or f"masks/{case.id}.png"
             overlay_path = f"overlays/{case.id}-{prediction.id}.png"
-            for relative, image in ((mask_path, reading.mask), (overlay_path, reading.overlay)):
+            outputs = [(overlay_path, reading.overlay)]
+            if not edited:
+                outputs.append((mask_path, reading.mask))
+            for relative, image in outputs:
                 (storage / relative).parent.mkdir(parents=True, exist_ok=True)
                 image.save(storage / relative, format="PNG")
             prediction.label = reading.label
@@ -62,6 +75,9 @@ def run_forever(pipeline, poll_seconds=2.0):
 
 _pipeline = None
 _pipeline_dir = None
+# One model run at a time per process: requests are served on several
+# threads, and Grad-CAM hooks on the shared model are not thread-safe.
+_model_lock = threading.Lock()
 
 
 def run_model_inline(case_id, limit=1):
@@ -80,16 +96,17 @@ def run_model_inline(case_id, limit=1):
         return 0  # torch not installed here; the worker handles it
     models_dir = current_app.config["MODELS_DIR"]
     global _pipeline, _pipeline_dir
-    if _pipeline is None or _pipeline_dir != models_dir:
+    with _model_lock:
+        if _pipeline is None or _pipeline_dir != models_dir:
+            try:
+                _pipeline = Pipeline(models_dir)
+            except Exception:
+                _pipeline = None
+                _pipeline_dir = None
+                return 0  # no model files here; the worker handles it
+            _pipeline_dir = models_dir
         try:
-            _pipeline = Pipeline(models_dir)
+            return process_queued(_pipeline, limit=limit, case_id=case_id)
         except Exception:
-            _pipeline = None
-            _pipeline_dir = None
-            return 0  # no model files here; the worker handles it
-        _pipeline_dir = models_dir
-    try:
-        return process_queued(_pipeline, limit=limit, case_id=case_id)
-    except Exception:
-        current_app.logger.warning("Inline model run failed.", exc_info=True)
-        return 0
+            current_app.logger.warning("Inline model run failed.", exc_info=True)
+            return 0

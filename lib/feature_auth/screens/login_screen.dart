@@ -16,8 +16,7 @@ class LoginScreen extends StatelessWidget {
       padding: const .all(AppSizes.gap16),
       child: LayoutBuilder(
         builder: (context, constraints) {
-          final narrow =
-              constraints.maxWidth < AppSizes.narrowBreakpoint;
+          final narrow = constraints.maxWidth < AppSizes.narrowBreakpoint;
           return SizedBox(
             width: narrow ? null : AppSizes.loginCardWidth,
             height: narrow ? null : AppSizes.loginCardHeight,

@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import func
 
+from . import catalog
 from .cases import reopen
 from .errors import ApiError
 from .extensions import db
@@ -225,6 +226,7 @@ def assign_cases():
         case.assigned_at = now()
         case.due_at = due_at
         case.status = ASSIGNED
+        case.hidden_by = None
         audit(case, action, f"to {doctor.full_name}")
     db.session.commit()
     return jsonify([_summary(c) for c in cases])
@@ -252,6 +254,7 @@ def return_case(case_id):
     if not isinstance(note, str) or not note.strip():
         raise ApiError(422, "A 'note' explaining the return is required.")
     case.status = RETURNED
+    case.hidden_by = None  # the doctor must see what came back to them
     reopen(case.current_review)
     audit(case, "returned", note.strip())
     db.session.commit()
@@ -332,6 +335,39 @@ def export():
     raise ApiError(400, "'kind' must be 'reviews' or 'model_feedback'.")
 
 
+QUEUE_SIZE = 5
+
+
+def _queue(query, since, limit=QUEUE_SIZE):
+    """The longest-waiting cases of one dashboard queue, with the moment
+    each started waiting, plus how many the queue holds in all."""
+    rows = query.order_by(since).all()
+    return {
+        "count": len(rows),
+        "cases": [{**_summary(c), "waiting_since": iso(w)} for c, w in rows[:limit]],
+    }
+
+
+def _queues():
+    """What waits for the admin: reviews to sign off, cases past their due
+    date, and cases nobody has been given yet. Oldest first in each."""
+    sign_off = (
+        db.session.query(Case, Review.submitted_at)
+        .join(Review, (Review.case_id == Case.id) & (Review.doctor_id == Case.assigned_to))
+        .filter(Case.status == SUBMITTED)
+    )
+    overdue = (
+        db.session.query(Case, Case.due_at)
+        .filter(Case.status.in_(OPEN_STATUSES), Case.due_at.isnot(None), Case.due_at < now())
+    )
+    unassigned = db.session.query(Case, Case.created_at).filter(Case.status == UNASSIGNED)
+    return {
+        "sign_off": _queue(sign_off, Review.submitted_at),
+        "overdue": _queue(overdue, Case.due_at),
+        "unassigned": _queue(unassigned, Case.created_at),
+    }
+
+
 @bp.get("/stats")
 @login_required(ROLE_ADMIN)
 def stats():
@@ -349,9 +385,19 @@ def stats():
         entry = workload.setdefault(
             doctor_id, {"open": 0, "submitted": 0, "accepted": 0})
         entry["open" if status in OPEN_STATUSES else status] += count
+    oldest_open = dict(
+        db.session.query(Case.assigned_to, func.min(Case.assigned_at))
+        .filter(Case.assigned_to.isnot(None), Case.status.in_(OPEN_STATUSES))
+        .group_by(Case.assigned_to)
+        .all()
+    )
     doctors = [
-        {"doctor": u.to_dict(), **workload.get(u.id,
-                                               {"open": 0, "submitted": 0, "accepted": 0})}
+        {
+            "doctor": u.to_dict(),
+            **workload.get(u.id, {"open": 0, "submitted": 0, "accepted": 0}),
+            # When the doctor's longest-waiting open case was handed over.
+            "oldest_open_since": iso(oldest_open.get(u.id)),
+        }
         for u in User.query.filter_by(role=ROLE_DOCTOR).order_by(User.full_name)
     ]
 
@@ -367,9 +413,31 @@ def stats():
         verdict_is_tb = review.verdict == "tb_suspected"
         compared += 1
         agreed += int(prediction_is_tb == verdict_is_tb)
+    # What doctors concluded, and how they said the model was wrong.
+    verdicts = {code: 0 for code in catalog.VERDICTS}
+    verdict_rows = (
+        db.session.query(Review.verdict, func.count())
+        .filter(Review.state == SUBMITTED, Review.verdict.isnot(None))
+        .group_by(Review.verdict)
+    )
+    for code, count in verdict_rows:
+        verdicts[code] = verdicts.get(code, 0) + count
+    feedback = {kind: 0 for kind in catalog.FEEDBACK_KINDS}
+    feedback_rows = (
+        db.session.query(ModelFeedback.kind, func.count())
+        .join(Review, ModelFeedback.review_id == Review.id)
+        .filter(Review.state == SUBMITTED)
+        .group_by(ModelFeedback.kind)
+    )
+    for kind, count in feedback_rows:
+        feedback[kind] = feedback.get(kind, 0) + count
+
     return jsonify(
         by_status=by_status,
         doctors=doctors,
+        queues=_queues(),
+        verdicts=verdicts,
+        model_feedback=feedback,
         model_agreement={
             "compared": compared,
             "agreed": agreed,

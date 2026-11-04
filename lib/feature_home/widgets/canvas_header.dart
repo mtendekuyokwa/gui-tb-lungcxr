@@ -37,8 +37,7 @@ class CanvasHeader extends StatelessWidget {
           builder: (context, constraints) {
             // The signed-in name is decoration; on narrow screens the
             // avatar, patient and status need the room more.
-            final wide =
-                constraints.maxWidth >= AppSizes.narrowBreakpoint;
+            final wide = constraints.maxWidth >= AppSizes.narrowBreakpoint;
             return Row(
               spacing: AppSizes.gap12,
               children: [
@@ -70,8 +69,12 @@ class CanvasHeader extends StatelessWidget {
                                 fontFeatures: const [.tabularFigures()],
                               ),
                             ),
+                            if (patient.hospitalName case final hospital?)
+                              TextSpan(text: '  ·  $hospital'),
                           ],
                         ),
+                        maxLines: 1,
+                        overflow: .ellipsis,
                         style: muted,
                       ),
                     ],

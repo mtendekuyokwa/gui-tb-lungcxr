@@ -12,28 +12,40 @@ SERVER_DIR = pathlib.Path(__file__).resolve().parent.parent
 DEV_SECRET = "dev-only-secret-change-me-before-deploying"
 
 
+# Columns added after the first release: (table, column, SQL type and default).
+_ADDED_COLUMNS = (
+    ("marks", "note", "TEXT DEFAULT ''"),
+    ("cases", "hospital_id", "INTEGER REFERENCES hospitals(id)"),
+    ("cases", "hidden_by", "INTEGER REFERENCES users(id)"),
+    ("predictions", "input_mask_path", "VARCHAR(512)"),
+)
+
+
 def _ensure_schema():
-    """Adds columns that older development databases lack.
+    """Adds tables and columns that older development databases lack.
 
     There are no schema migrations (tables come from ``create_all()``), so a
     fresh checkout recreates its database while a working one is altered in
-    place. Missing tables (before ``init-db``) are left alone.
+    place. A database without tables (before ``init-db``) is left alone.
     """
     from sqlalchemy import inspect, text
-    from sqlalchemy.exc import NoSuchTableError
 
-    try:
-        columns = [c["name"] for c in inspect(db.engine).get_columns("marks")]
-    except NoSuchTableError:
+    from . import models  # noqa: F401  registers every table on db.metadata
+
+    inspector = inspect(db.engine)
+    tables = set(inspector.get_table_names())
+    if "cases" not in tables:
         return
-    if "note" not in columns:
-        if db.engine.dialect.name == "postgresql":
-            db.session.execute(
-                text("ALTER TABLE marks ADD COLUMN IF NOT EXISTS note TEXT DEFAULT ''"))
-        else:
-            db.session.execute(
-                text("ALTER TABLE marks ADD COLUMN note TEXT DEFAULT ''"))
-        db.session.commit()
+    db.create_all()  # only creates the missing tables, e.g. hospitals
+    for table, column, kind in _ADDED_COLUMNS:
+        if table not in tables:
+            continue
+        if column in [c["name"] for c in inspector.get_columns(table)]:
+            continue
+        guard = "IF NOT EXISTS " if db.engine.dialect.name == "postgresql" else ""
+        db.session.execute(
+            text(f"ALTER TABLE {table} ADD COLUMN {guard}{column} {kind}"))
+    db.session.commit()
 
 
 def create_app(config=None):

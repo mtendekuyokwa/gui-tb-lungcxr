@@ -36,16 +36,17 @@ class AdminSidebar extends StatelessWidget {
       (a) => _actionable(a.stats),
     );
 
-    FSidebarItem item(AdminPage target, IconData icon, String label,
-        {int? badge}) => FSidebarItem(
+    FSidebarItem item(
+      AdminPage target,
+      IconData icon,
+      String label, {
+      int? badge,
+    }) => FSidebarItem(
       icon: Icon(icon),
-      label: Text(
-        switch (badge) {
-          int n when n > 0 => '$label · $n',
-          _ => label,
-        },
-        maxLines: 1,
-      ),
+      label: Text(switch (badge) {
+        int n when n > 0 => '$label · $n',
+        _ => label,
+      }, maxLines: 1),
       selected: page == target,
       onPress: () => onSelect(target),
     );
@@ -62,8 +63,11 @@ class AdminSidebar extends StatelessWidget {
         FSidebarGroup(
           label: const Text(Strings.adminNav),
           children: [
-            item(AdminPage.dashboard, FLucideIcons.layoutDashboard,
-                Strings.dashboard),
+            item(
+              AdminPage.dashboard,
+              FLucideIcons.layoutDashboard,
+              Strings.dashboard,
+            ),
             item(
               AdminPage.cases,
               FLucideIcons.layers,

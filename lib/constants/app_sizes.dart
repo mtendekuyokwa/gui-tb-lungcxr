@@ -10,6 +10,7 @@ class AppSizes {
   static const double gap12 = 12;
   static const double gap16 = 16;
   static const double gap18 = 18;
+  static const double gap20 = 20;
   static const double gap24 = 24;
 
   // Corner radii
@@ -21,6 +22,7 @@ class AppSizes {
   // Icons
   static const double icon16 = 16;
   static const double icon18 = 18;
+  static const double icon24 = 24;
   static const double icon32 = 32;
 
   // Patient avatars
@@ -38,12 +40,26 @@ class AppSizes {
   static const double loginButtonWidth = 100;
 
   // Doctor workspace
-  /// Width of the case list / review / chat column.
-  static const double sidePanelWidth = 340;
+  /// Default width of the case list / review column.
+  static const double sidePanelWidth = 400;
+
+  /// Bounds when the doctor drags the review column's edge.
+  static const double sidePanelMinWidth = 320;
+  static const double sidePanelMaxFraction = 0.5;
+
+  /// Hit area of that drag handle, and the line drawn in it.
+  static const double resizeHandleWidth = 8;
+  static const double resizeHandleLine = 1;
+  static const double resizeHandleLineActive = 3;
+
+  /// Width of the stroke-width slider in the segmentation bar.
+  static const double segmentSliderWidth = 160;
 
   /// The case list scrolls once it is taller than this.
   static const double caseListMaxHeight = 260;
-  static const double chatBubbleMaxWidth = 260;
+
+  /// Share of the window height the (expanded) case list may take.
+  static const double caseListMaxFraction = 0.28;
 
   // X-ray canvas
   /// How far the image can be panned past the viewport edge.
@@ -77,6 +93,9 @@ class AppSizes {
   /// Width of the upload / assign / case detail column.
   static const double adminPanelWidth = 380;
   static const double adminPageMaxWidth = 720;
+  static const double fabSize = 56;
+  static const double fabNarrowInset = 72;
+  static const double panelMaxWidth = 560;
 
   /// Below this width the workspaces switch to a single-column tab layout.
   static const double narrowBreakpoint = 700;
@@ -91,23 +110,16 @@ class AppSizes {
   /// Height of the icon box in a dashboard stat tile.
   static const double statIconBox = 28;
 
-  /// Width of one dashboard stat tile on a narrow screen.
-  static const double adminTileWidth = 148;
-
   /// Width of the strip's health card on a wide screen.
   static const double adminHealthCardWidth = 160;
 
-  /// Height of the workload bar chart in the insights cards.
-  static const double chartBarHeight = 190;
+  /// Widest the dashboard grows; past this the two columns get too long
+  /// to read across.
+  static const double dashboardMaxWidth = 1200;
 
-  /// Height of the status donut in the insights cards.
-  static const double chartDonutHeight = 160;
-
-  /// Slice thickness of the status donut.
-  static const double chartDonutRadius = 26;
-
-  /// Center hole of the status donut.
-  static const double chartDonutHole = 34;
+  /// Content width from which the dashboard sets the model and workload
+  /// cards side by side.
+  static const double dashboardTwoColumn = 820;
 
   /// Doctors the workload chart shows before truncating to keep the axis
   /// readable.

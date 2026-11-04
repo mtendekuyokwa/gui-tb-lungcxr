@@ -26,10 +26,12 @@ class FakePipeline:
     def __init__(self, fail_on=()):
         self.fail_on = set(fail_on)
         self.seen = []
+        self.masks = []
 
-    def read(self, image_path):
+    def read(self, image_path, mask_path=None):
         case_id = int(pathlib.Path(image_path).stem)
         self.seen.append(case_id)
+        self.masks.append(mask_path)
         if case_id in self.fail_on:
             raise ValueError("unreadable")
         return FakeReading()
@@ -53,6 +55,7 @@ def test_worker_stores_reading_and_serves_overlay(app, client, admin, doc1):
         "tb_probability": 0.91,
         "has_overlay": True,
         "has_mask": True,
+        "edited_mask": False,
     }
     overlay = client.get(f"{API}/cases/{first}/overlay", headers=doc1)
     assert overlay.status_code == 200 and overlay.data[:4] == b"\x89PNG"
@@ -139,3 +142,42 @@ def test_real_models_read_a_chest_xray(pipeline):
     assert np.asarray(reading.overlay)[..., 3].max() > 0
     again = pipeline.read(path)
     assert again.tb_probability == pytest.approx(reading.tb_probability, abs=1e-5)
+
+
+def test_reevaluate_classifies_with_the_corrected_mask(app, client, admin, doc1):
+    cid = upload(client, admin)
+    assign(client, admin, [cid], "doc1@test")
+    worker.process_queued(FakePipeline())
+    url = f"{API}/cases/{cid}"
+    # Nothing corrected yet.
+    assert client.post(f"{url}/reevaluate", headers=doc1).status_code == 422
+
+    # Erase the whole left half of the (all-lung) fake mask.
+    erase = {"kind": "erase", "tool": "brush", "width": 0.2,
+             "points": [[0.1, y / 10] for y in range(11)] + [[0.4, y / 10] for y in range(11)]}
+    client.put(f"{url}/review", headers=doc1, json={"mask_edits": [erase]})
+    case = client.post(f"{url}/reevaluate", headers=doc1).json
+    assert case["prediction"]["state"] == "queued"
+    assert case["prediction"]["edited_mask"] is True
+    assert case["review"]["mask_edits"] == []  # baked into the new mask
+
+    pipeline = FakePipeline()
+    assert worker.process_queued(pipeline) == 1
+    storage = pathlib.Path(app.config["STORAGE_DIR"])
+    prediction = db.session.get(Case, cid).prediction
+    assert pipeline.masks == [storage / prediction.input_mask_path]
+    assert prediction.mask_path == prediction.input_mask_path
+    assert (storage / f"masks/{cid}.png").is_file()  # the model mask is kept
+    with Image.open(storage / prediction.mask_path) as baked:
+        pixels = np.asarray(baked)
+    assert pixels[16, 2] == 0 and pixels[16, 30] == 255
+    assert [p.state for p in db.session.get(Case, cid).predictions] == ["done", "done"]
+    assert client.get(f"{url}/mask", headers=doc1).status_code == 200
+
+
+def test_reevaluate_needs_a_finished_mask(client, admin, doc1):
+    cid = upload(client, admin)
+    assign(client, admin, [cid], "doc1@test")
+    edit = {"kind": "add", "tool": "pen", "width": 0.01, "points": [[0.5, 0.5]]}
+    client.put(f"{API}/cases/{cid}/review", headers=doc1, json={"mask_edits": [edit]})
+    assert client.post(f"{API}/cases/{cid}/reevaluate", headers=doc1).status_code == 409

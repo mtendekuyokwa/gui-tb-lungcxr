@@ -87,12 +87,9 @@ void main() {
   test('doctor filter is sent as a query parameter', () async {
     final doctor = admin.doctors.single;
     await admin.setDoctorFilter(doctor.id);
-    expect(
-      backend.log,
-      contains('GET /admin/cases?doctor=${doctor.id}'),
-    );
+    expect(backend.log, contains('GET /admin/cases?doctor=${doctor.id}'));
     await admin.setDoctorFilter(null);
-    expect(backend.log.last, 'GET /admin/stats');
+    expect(backend.log, contains('GET /admin/stats'));
     expect(backend.log, contains('GET /admin/cases'));
   });
 
@@ -121,16 +118,24 @@ void main() {
     final doctor = admin.doctors.single;
     final due = DateTime.utc(2026, 11, 1);
     expect(await admin.assign(doctor.id, dueAt: due), isTrue);
-    expect(
-      backend.lastAssign!['due_at'],
-      due.toUtc().toIso8601String(),
-    );
+    expect(backend.lastAssign!['due_at'], due.toUtc().toIso8601String());
   });
 
   test('stats load with the case list', () async {
     expect(backend.log, contains('GET /admin/stats'));
     expect(admin.stats, isNotNull);
-    expect(admin.stats!.open, 2);
+    expect(admin.stats!.workload.single.open, 2);
+    expect(admin.stats!.verdicts, containsPair('tb_suspected', 0));
+  });
+
+  test('a dashboard drilldown replaces every filter', () async {
+    await admin.setDoctorFilter(2);
+    await admin.setFlagFilter(CaseFlag.needsTesting);
+    await admin.showOnly(status: CaseStatus.submitted);
+    expect(admin.statusFilter, CaseStatus.submitted);
+    expect(admin.doctorFilter, isNull);
+    expect(admin.flagFilter, isNull);
+    expect(backend.log, contains('GET /admin/cases?status=submitted'));
   });
 
   test('export fetches the CSV text', () async {

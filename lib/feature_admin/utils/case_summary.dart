@@ -7,6 +7,7 @@ import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 /// Second line of a case row: who has it and, once reviewed, the verdict.
 String caseRowDetails(CxrCase item, Catalog catalog) => [
   item.doctorName ?? Strings.statusUnassigned,
+  ?item.hospitalName,
   if (item.verdict != null) catalog.label(catalog.verdicts, item.verdict),
 ].join(' · ');
 

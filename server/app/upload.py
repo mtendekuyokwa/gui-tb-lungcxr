@@ -11,7 +11,7 @@ from PIL import Image, UnidentifiedImageError
 
 from .errors import ApiError
 from .extensions import db
-from .models import ASSIGNED, Case, Patient, Prediction, QUEUED, now
+from .models import ASSIGNED, Case, Hospital, Patient, Prediction, QUEUED, now
 from .security import audit
 
 UPLOAD_FORMATS = {"PNG", "JPEG"}
@@ -38,12 +38,24 @@ def save_png(image, case_id):
     return relative
 
 
+def read_hospital(form):
+    """The optional ``hospital_id`` form field as a Hospital, or None."""
+    raw = form.get("hospital_id", "").strip()
+    if not raw:
+        return None
+    hospital = db.session.get(Hospital, int(raw)) if raw.isdigit() else None
+    if hospital is None:
+        raise ApiError(422, "'hospital_id' must be an existing hospital.")
+    return hospital
+
+
 def create_case(upload, form, assigned_to=None, assigned_by=None, note=None):
     """Validates and stores the upload, creates the patient and case, and —
     outside tests and with the model files present — runs the model inline.
     ``assigned_to`` makes it the receiver's case from creation on."""
     # Validated before any row is created, so a bad file leaves nothing behind.
     image = read_image(upload)
+    hospital = read_hospital(form)
     hospital_number = form.get("hospital_number", "").strip() or None
     patient = (
         Patient.query.filter_by(hospital_number=hospital_number).first()
@@ -66,7 +78,7 @@ def create_case(upload, form, assigned_to=None, assigned_by=None, note=None):
         )
         db.session.add(patient)
 
-    case = Case(patient=patient)
+    case = Case(patient=patient, hospital=hospital)
     if assigned_to is not None:
         case.assigned_to = assigned_to
         case.assigned_by = assigned_by

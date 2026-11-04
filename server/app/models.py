@@ -85,12 +85,27 @@ class Patient(db.Model):
         }
 
 
+class Hospital(db.Model):
+    """Where an X-ray was taken. Looked up or created from the upload form."""
+
+    __tablename__ = "hospitals"
+
+    id = db.Column(db.Integer, primary_key=True)
+    name = db.Column(db.String(255), unique=True, nullable=False)
+    created_at = db.Column(db.DateTime(timezone=True),
+                           nullable=False, default=now)
+
+    def to_dict(self):
+        return {"id": self.id, "name": self.name}
+
+
 class Case(db.Model):
     __tablename__ = "cases"
 
     id = db.Column(db.Integer, primary_key=True)
     patient_id = db.Column(db.Integer, db.ForeignKey(
         "patients.id"), nullable=False)
+    hospital_id = db.Column(db.Integer, db.ForeignKey("hospitals.id"))
     image_path = db.Column(db.String(512))
     status = db.Column(db.String(20), nullable=False,
                        default=UNASSIGNED, index=True)
@@ -98,10 +113,14 @@ class Case(db.Model):
     assigned_by = db.Column(db.Integer, db.ForeignKey("users.id"))
     assigned_at = db.Column(db.DateTime(timezone=True))
     due_at = db.Column(db.DateTime(timezone=True))
+    # The doctor who hid the case from their own list. Only hides it while
+    # that doctor is the assignee; the admin always sees it.
+    hidden_by = db.Column(db.Integer, db.ForeignKey("users.id"))
     created_at = db.Column(db.DateTime(timezone=True),
                            nullable=False, default=now)
 
     patient = db.relationship("Patient")
+    hospital = db.relationship("Hospital")
     doctor = db.relationship("User", foreign_keys=[assigned_to])
     predictions = db.relationship(
         "Prediction", order_by="Prediction.id", cascade="all, delete-orphan"
@@ -129,6 +148,7 @@ class Case(db.Model):
             "id": self.id,
             "status": self.status,
             "patient": self.patient.to_dict(),
+            "hospital": self.hospital.to_dict() if self.hospital else None,
             "assigned_to": self.doctor.to_dict() if self.doctor else None,
             "assigned_at": iso(self.assigned_at),
             "due_at": iso(self.due_at),
@@ -147,6 +167,9 @@ class Prediction(db.Model):
     label = db.Column(db.String(20))
     tb_probability = db.Column(db.Float)
     mask_path = db.Column(db.String(512))
+    # Set when the doctor's corrected lung mask is re-evaluated: the
+    # classifier then uses this mask instead of running the segmenter.
+    input_mask_path = db.Column(db.String(512))
     overlay_path = db.Column(db.String(512))
     state = db.Column(db.String(20), nullable=False,
                       default=QUEUED, index=True)
@@ -162,6 +185,7 @@ class Prediction(db.Model):
             "tb_probability": self.tb_probability,
             "has_overlay": bool(self.overlay_path),
             "has_mask": bool(self.mask_path),
+            "edited_mask": bool(self.input_mask_path),
         }
 
 

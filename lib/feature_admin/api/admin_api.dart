@@ -67,6 +67,20 @@ class AdminApi {
     return [for (final item in json) AppPatient.fromJson(item)];
   }
 
+  /// Hospitals whose name contains [query]; every hospital when empty.
+  Future<List<AppHospital>> hospitals([String query = '']) async {
+    final json = await _client.get(
+      Endpoints.hospitals,
+      query: {if (query.isNotEmpty) 'q': query},
+    ) as List;
+    return [for (final item in json) AppHospital.fromJson(item)];
+  }
+
+  /// Adds a hospital, or returns the existing one with that name.
+  Future<AppHospital> createHospital(String name) async => AppHospital.fromJson(
+    await _client.post(Endpoints.hospitals, {'name': name}),
+  );
+
   /// Activate or deactivate a user, rename them, or reset their password.
   /// Only non-null fields are sent.
   Future<AppUser> updateUser(
@@ -113,11 +127,16 @@ class AdminApi {
   Future<void> upload({
     required String patientName,
     String? hospitalNumber,
+    int? hospitalId,
     required Uint8List bytes,
     required String filename,
   }) => _client.upload(
     Endpoints.adminCases,
-    fields: {'patient_name': patientName, 'hospital_number': ?hospitalNumber},
+    fields: {
+      'patient_name': patientName,
+      'hospital_number': ?hospitalNumber,
+      'hospital_id': ?hospitalId?.toString(),
+    },
     fileField: 'image',
     bytes: bytes,
     filename: filename,

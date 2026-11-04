@@ -1,0 +1,12 @@
+.venv/
+__pycache__/
+.pytest_cache/
+.ruff_cache/
+.cache/
+instance/
+storage/
+models/
+pipline/
+tests/
+*.md
+!RAILWAY.md

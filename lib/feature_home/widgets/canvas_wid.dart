@@ -9,7 +9,6 @@ import 'package:gui_lungcxr/feature_home/widgets/adjustment_panel.dart';
 import 'package:gui_lungcxr/feature_home/widgets/lesion_label_panel.dart';
 import 'package:gui_lungcxr/feature_home/widgets/mark_layer.dart';
 import 'package:gui_lungcxr/feature_home/widgets/mask_edit_layer.dart';
-import 'package:gui_lungcxr/feature_home/widgets/segment_panel.dart';
 import 'package:gui_lungcxr/feature_home/widgets/viewer_toolbar.dart';
 import 'package:gui_lungcxr/feature_home/widgets/xray_image.dart';
 import 'package:provider/provider.dart';
@@ -54,9 +53,9 @@ class CanvasWid extends StatelessWidget {
                           url: cases.imageUrl(selected.id),
                           headers: cases.imageHeaders,
                           heatmapUrl: editor.xaiEnabled && hasHeatmap
-                              ? cases.overlayUrl(selected.id)
+                              ? cases.overlayUrl(selected)
                               : null,
-                          maskUrl: showMask ? cases.maskUrl(selected.id) : null,
+                          maskUrl: showMask ? cases.maskUrl(selected) : null,
                           overlay: Stack(
                             children: [
                               MarkLayer(editor: editor),
@@ -86,8 +85,6 @@ class CanvasWid extends StatelessWidget {
                         )
                       else if (editor.tool.isAdjustment)
                         AdjustmentPanel(editor: editor)
-                      else if (editor.tool == .segment)
-                        SegmentPanel(editor: editor)
                       else if (editor.tool == .mark)
                         FBadge(
                           variant: .secondary,

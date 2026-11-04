@@ -1,15 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:forui/forui.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_admin/state/admin_state.dart';
-import 'package:gui_lungcxr/feature_admin/widgets/admin_section.dart';
 import 'package:provider/provider.dart';
 
-/// Form for creating a new user (doctor or admin).
+/// The backend role value the account is created with (doctor or admin).
 enum UserRole { doctor, admin }
 
+/// Form for creating a new user (doctor or admin). It lives in the create
+/// pop-up, so it has no card chrome of its own — the pop-up panel owns the
+/// title.
 class NewUser extends StatefulWidget {
-  const NewUser({super.key});
+  const NewUser({this.onDone, super.key});
+
+  /// Called after a successful submit, so the pop-up can close itself.
+  final VoidCallback? onDone;
 
   @override
   State<NewUser> createState() => _NewUserState();
@@ -49,6 +55,7 @@ class _NewUserState extends State<NewUser> {
     _fullName.clear();
     _password.clear();
     setState(() => _role = UserRole.doctor);
+    widget.onDone?.call();
     showFToast(
       context: context,
       icon: const Icon(FLucideIcons.circleCheck),
@@ -65,8 +72,9 @@ class _NewUserState extends State<NewUser> {
         _password.text.length >= 8 &&
         !admin.busy;
 
-    return AdminSection(
-      title: Strings.createUser,
+    return Column(
+      crossAxisAlignment: .stretch,
+      spacing: AppSizes.gap8,
       children: [
         FTextField(
           control: .managed(controller: _fullName),
@@ -81,13 +89,19 @@ class _NewUserState extends State<NewUser> {
           control: .managed(controller: _password),
           hint: Strings.enterPassword,
         ),
-
         FButton(
           size: .sm,
           onPress: ready ? () => _submit(admin) : null,
           prefix: const Icon(FLucideIcons.user),
           child: const Text(Strings.createUser),
         ),
+        if (admin.error case final error?)
+          Text(
+            error,
+            style: context.theme.typography.body.sm.copyWith(
+              color: context.theme.colors.destructive,
+            ),
+          ),
       ],
     );
   }

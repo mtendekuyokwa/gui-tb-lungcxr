@@ -7,14 +7,15 @@ import 'package:gui_lungcxr/feature_admin/widgets/admin_header.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/admin_sidebar.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/admin_workbench.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/case_detail_card.dart';
-import 'package:gui_lungcxr/feature_admin/widgets/charts.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/case_list.dart';
-import 'package:gui_lungcxr/feature_admin/widgets/dashboard_strip.dart';
+import 'package:gui_lungcxr/feature_admin/widgets/admin_dashboard.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/doctor_list.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/export_card.dart';
+import 'package:gui_lungcxr/feature_admin/widgets/hospital_list.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/new_user.dart';
-import 'package:gui_lungcxr/feature_admin/widgets/upload_card.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/assign_card.dart';
+import 'package:gui_lungcxr/widgets/create_fab.dart';
+import 'package:gui_lungcxr/widgets/new_case_form.dart';
 import 'package:gui_lungcxr/widgets/narrow_tabs.dart';
 import 'package:provider/provider.dart';
 
@@ -40,57 +41,118 @@ class _AdminHomeState extends State<AdminHome> {
     final admin = context.watch<AdminState>();
     final theme = context.theme;
 
-    return Column(
-      crossAxisAlignment: .stretch,
+    return Stack(
       children: [
-        AdminHeader(title: _title(_page)),
-        if (admin.error case final error?)
-          Padding(
-            padding: const .fromLTRB(
-              AppSizes.gap16,
-              AppSizes.gap8,
-              AppSizes.gap16,
-              0,
+        Column(
+          crossAxisAlignment: .stretch,
+          children: [
+            AdminHeader(title: _title(_page)),
+            // Every admin action is async; a thin bar says one is running.
+            if (admin.busy && !admin.loading) const FProgress(),
+            if (admin.error case final error?)
+              Padding(
+                padding: const .fromLTRB(
+                  AppSizes.gap16,
+                  AppSizes.gap8,
+                  AppSizes.gap16,
+                  0,
+                ),
+                child: Text(
+                  error,
+                  style: theme.typography.body.sm.copyWith(
+                    color: theme.colors.destructive,
+                  ),
+                ),
+              ),
+            Expanded(
+              child: admin.loading
+                  ? const Center(child: FCircularProgress())
+                  : LayoutBuilder(
+                      builder: (context, constraints) {
+                        final wide =
+                            constraints.maxWidth >= AppSizes.narrowBreakpoint;
+                        if (wide) {
+                          return Row(
+                            crossAxisAlignment: .stretch,
+                            children: [
+                              AdminSidebar(page: _page, onSelect: _go),
+                              Expanded(child: _pageOf(_page, wide: true)),
+                            ],
+                          );
+                        }
+                        return NarrowTabs(
+                          index: _page.index,
+                          onChanged: (i) => _go(AdminPage.values[i]),
+                          tabs: [
+                            for (final page in AdminPage.values)
+                              NarrowTab(
+                                label: _title(page),
+                                icon: _icon(page),
+                                page: _pageOf(page, wide: false),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
             ),
-            child: Text(
-              error,
-              style: theme.typography.body.sm.copyWith(
-                color: theme.colors.destructive,
+          ],
+        ),
+        // Files cases and adds users from any page.
+        CreateFab(
+          actions: [
+            CreateAction(
+              label: Strings.uploadCase,
+              icon: FLucideIcons.image,
+              builder: (origin, onDone) => _provided(
+                origin: origin,
+                builder: (admin) => NewCaseForm(
+                  upload:
+                      ({
+                        required patientName,
+                        required hospitalNumber,
+                        hospitalId,
+                        required bytes,
+                        required filename,
+                      }) => admin.upload(
+                        patientName: patientName,
+                        hospitalNumber: hospitalNumber,
+                        hospitalId: hospitalId,
+                        bytes: bytes,
+                        filename: filename,
+                      ),
+                  search: admin.patients,
+                  searchHospitals: admin.hospitals,
+                  createHospital: admin.createHospital,
+                  busy: admin.busy,
+                  error: admin.error,
+                  onDone: onDone,
+                ),
               ),
             ),
-          ),
-        Expanded(
-          child: admin.loading
-              ? const Center(child: FCircularProgress())
-              : LayoutBuilder(
-                  builder: (context, constraints) {
-                    final wide =
-                        constraints.maxWidth >= AppSizes.narrowBreakpoint;
-                    if (wide) {
-                      return Row(
-                        crossAxisAlignment: .stretch,
-                        children: [
-                          AdminSidebar(page: _page, onSelect: _go),
-                          Expanded(child: _pageOf(_page, wide: true)),
-                        ],
-                      );
-                    }
-                    return NarrowTabs(
-                      index: _page.index,
-                      onChanged: (i) => _go(AdminPage.values[i]),
-                      tabs: [
-                        for (final page in AdminPage.values)
-                          NarrowTab(
-                            label: _title(page),
-                            icon: _icon(page),
-                            page: _pageOf(page, wide: false),
-                          ),
-                      ],
-                    );
-                  },
-                ),
+            CreateAction(
+              label: Strings.createUser,
+              icon: FLucideIcons.userPlus,
+              builder: (origin, onDone) => _provided(
+                origin: origin,
+                builder: (admin) => NewUser(onDone: onDone),
+              ),
+            ),
+          ],
         ),
       ],
+    );
+  }
+
+  /// The pop-up panel mounts outside the workspace, below the navigator, so
+  /// re-provide the admin state it needs and keep the form reacting to it.
+  Widget _provided({
+    required BuildContext origin,
+    required Widget Function(AdminState admin) builder,
+  }) {
+    final admin = origin.read<AdminState>();
+    return ChangeNotifierProvider<AdminState>.value(
+      value: admin,
+      child: Consumer<AdminState>(builder: (_, admin, _) => builder(admin)),
     );
   }
 
@@ -108,23 +170,13 @@ class _AdminHomeState extends State<AdminHome> {
     AdminPage.export => FLucideIcons.download,
   };
 
-  /// Every tap on a dashboard tile or chart filter lands on the page where
-  /// the filter takes effect: overview narrows into the queue.
+  /// Every number on the dashboard lands on the Cases page, filtered to
+  /// what it counts.
   Widget _pageOf(AdminPage page, {required bool wide}) => switch (page) {
-    AdminPage.dashboard => SingleChildScrollView(
-      padding: const .all(AppSizes.gap12),
-      child: Column(
-        crossAxisAlignment: .stretch,
-        spacing: AppSizes.gap12,
-        children: [
-          DashboardStrip(onOpen: () => _go(AdminPage.cases)),
-          AdminCharts(onOpen: () => _go(AdminPage.cases)),
-        ],
-      ),
-    ),
+    AdminPage.dashboard => AdminDashboard(onOpen: () => _go(AdminPage.cases)),
     AdminPage.cases => wide ? _CasesWide() : _CasesNarrow(),
     AdminPage.team => _CenteredPage(
-      children: const [NewUser(), DoctorList()],
+      children: const [DoctorList(), HospitalList()],
     ),
     AdminPage.export => _CenteredPage(children: const [ExportCard()]),
   };
@@ -182,11 +234,7 @@ class _CasesNarrow extends StatelessWidget {
           label: Text(Strings.intakeTab),
           child: SingleChildScrollView(
             padding: const .all(AppSizes.gap12),
-            child: Column(
-              crossAxisAlignment: .stretch,
-              spacing: AppSizes.gap12,
-              children: const [UploadCard(), AssignCard()],
-            ),
+            child: const AssignCard(),
           ),
         ),
       ],

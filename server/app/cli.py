@@ -1,4 +1,10 @@
+import hashlib
+import os
+import pathlib
 import secrets
+import shutil
+import tempfile
+import urllib.request
 
 import click
 
@@ -80,3 +86,60 @@ def register(app):
                 count += 1
         db.session.commit()
         click.echo(f"Queued {count} prediction(s).")
+
+    @app.cli.command("ensure-admin")
+    def ensure_admin():
+        """Deployment bootstrap: creates the admin named by LUNGCXR_ADMIN_EMAIL /
+        LUNGCXR_ADMIN_PASSWORD (optional LUNGCXR_ADMIN_NAME) if no user has that
+        email yet. Does nothing when either variable is unset, and never changes
+        an existing account, so the password can be rotated in the app."""
+        email = os.environ.get("LUNGCXR_ADMIN_EMAIL", "").strip().lower()
+        password = os.environ.get("LUNGCXR_ADMIN_PASSWORD", "")
+        if not email or not password:
+            click.echo("ensure-admin: LUNGCXR_ADMIN_EMAIL/PASSWORD not set, skipping.")
+            return
+        if User.query.filter_by(email=email).first():
+            click.echo(f"ensure-admin: {email} already exists.")
+            return
+        if len(password) < 8:
+            raise click.ClickException("LUNGCXR_ADMIN_PASSWORD must be at least 8 characters.")
+        name = os.environ.get("LUNGCXR_ADMIN_NAME", "Hospital Admin").strip() or "Hospital Admin"
+        _add_user(email, name, ROLE_ADMIN, password)
+        db.session.commit()
+        click.echo(f"ensure-admin: created admin {email}")
+
+    @app.cli.command("fetch-models")
+    def fetch_models():
+        """Downloads missing model files into MODELS_DIR from the URLs in
+        LUNGCXR_SEGMENTER_URL and LUNGCXR_CLASSIFIER_URL (optionally checked
+        against LUNGCXR_SEGMENTER_SHA256 / LUNGCXR_CLASSIFIER_SHA256). Files
+        already present are kept, so a volume only downloads once."""
+        from .ml.pipeline import CLASSIFIER_FILE, SEGMENTER_FILE
+
+        models = pathlib.Path(app.config["MODELS_DIR"])
+        models.mkdir(parents=True, exist_ok=True)
+        for name, prefix in ((SEGMENTER_FILE, "SEGMENTER"), (CLASSIFIER_FILE, "CLASSIFIER")):
+            target = models / name
+            if target.is_file():
+                click.echo(f"fetch-models: {name} present.")
+                continue
+            url = os.environ.get(f"LUNGCXR_{prefix}_URL", "").strip()
+            if not url:
+                click.echo(f"fetch-models: {name} missing and LUNGCXR_{prefix}_URL unset; "
+                           "cases will wait for the model.")
+                continue
+            click.echo(f"fetch-models: downloading {name} ...")
+            digest = hashlib.sha256()
+            # Download beside the target, then rename, so a cut-off download
+            # never leaves a half file that looks present next boot.
+            with tempfile.NamedTemporaryFile(dir=models, delete=False) as part:
+                with urllib.request.urlopen(url, timeout=60) as response:
+                    while chunk := response.read(1 << 20):
+                        part.write(chunk)
+                        digest.update(chunk)
+            expected = os.environ.get(f"LUNGCXR_{prefix}_SHA256", "").strip().lower()
+            if expected and digest.hexdigest() != expected:
+                os.unlink(part.name)
+                raise click.ClickException(f"{name}: checksum mismatch, download discarded.")
+            shutil.move(part.name, target)
+            click.echo(f"fetch-models: saved {name} ({target.stat().st_size // 1_000_000} MB).")

@@ -145,17 +145,6 @@ class _CaseListState extends State<CaseList> {
               ),
             ),
           ],
-          ChoiceChips(
-            options: [
-              const Option(_all, Strings.all),
-              for (final status in CaseStatus.values)
-                Option(status.code, status.label),
-            ],
-            selected: {admin.statusFilter?.code ?? _all},
-            onTap: (code) => admin.setStatusFilter(
-              code == _all ? null : CaseStatus.fromCode(code),
-            ),
-          ),
           if (admin.ticked.isNotEmpty)
             _SelectionBar(
               count: admin.ticked.length,

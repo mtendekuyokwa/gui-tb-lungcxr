@@ -37,6 +37,7 @@ class CaseDetailCard extends StatelessWidget {
       children: [
         CasePreview(caseId: item.id),
         DetailLine(Strings.doctor, item.doctorName ?? Strings.statusUnassigned),
+        DetailLine(Strings.hospital, item.hospitalName ?? Strings.none),
         DetailLine(Strings.modelReading, modelReading(item.prediction)),
         if (review == null)
           Text(Strings.noReviewYet, style: muted)
