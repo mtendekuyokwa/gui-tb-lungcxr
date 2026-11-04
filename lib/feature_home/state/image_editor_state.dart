@@ -1,10 +1,13 @@
 import 'package:flutter/widgets.dart';
+import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/feature_home/models/lesion.dart';
 import 'package:gui_lungcxr/feature_home/models/mark.dart';
+import 'package:gui_lungcxr/feature_home/models/mask_edit.dart';
 
 enum EditorTool {
   pan,
   mark,
+  segment,
   brightness,
   contrast,
   hue,
@@ -12,9 +15,12 @@ enum EditorTool {
 
   bool get isAdjustment => switch (this) {
     brightness || contrast || hue || saturation => true,
-    pan || mark => false,
+    pan || mark || segment => false,
   };
 }
+
+/// The correction brush inside the segment tool.
+enum SegmentSubtool { brush, pen, eraser }
 
 /// View and edit state for one patient's X-ray: active tool, image
 /// adjustments, hand-drawn marks and zoom.
@@ -43,7 +49,19 @@ class ImageEditorState extends ChangeNotifier {
   int? _activeMark;
   int _resetCount = 0;
   bool _xaiEnabled = false;
+  bool _segmentationEnabled = false;
   bool _locked = false;
+
+  /// Corrections to the model's lung mask, painted in the segment tool.
+  final List<MaskEdit> _maskEdits = [];
+  bool _editingMask = false;
+  int _maskRevision = 0;
+  SegmentSubtool _segmentSubtool = .brush;
+  final Map<SegmentSubtool, double> _maskWidths = {
+    .brush: AppSizes.maskBrushDefaultWidth,
+    .pen: AppSizes.maskPenDefaultWidth,
+    .eraser: AppSizes.maskBrushDefaultWidth,
+  };
 
   /// True once the review is submitted: marks can be seen but not changed.
   bool get locked => _locked;
@@ -51,6 +69,7 @@ class ImageEditorState extends ChangeNotifier {
     if (value == _locked) return;
     _locked = value;
     _drawing = false;
+    _editingMask = false;
     _activeMark = null;
     notifyListeners();
   }
@@ -66,6 +85,20 @@ class ImageEditorState extends ChangeNotifier {
   /// Index of the mark being labelled, if any.
   int? get activeMark => _activeMark;
   bool get xaiEnabled => _xaiEnabled;
+  bool get segmentationEnabled => _segmentationEnabled;
+
+  /// The doctor's corrections to the model's lung mask.
+  List<MaskEdit> get maskEdits => _maskEdits;
+  bool get hasMaskEdits => _maskEdits.isNotEmpty;
+  bool get hasEraseEdits => _maskEdits.any((e) => e.kind == MaskEditKind.erase);
+
+  /// Bumped whenever [maskEdits] changes, mirroring [markRevision].
+  int get maskRevision => _maskRevision;
+
+  SegmentSubtool get segmentSubtool => _segmentSubtool;
+
+  /// Correction stroke width as a fraction of the image width.
+  double get maskWidth => _maskWidths[_segmentSubtool]!;
 
   /// Changes whenever adjustments are reset, so sliders can be rebuilt.
   int get resetCount => _resetCount;
@@ -76,9 +109,11 @@ class ImageEditorState extends ChangeNotifier {
   double adjustment(EditorTool tool) => _adjustments[tool] ?? 0;
 
   /// Selecting the active tool again returns to [EditorTool.pan].
+  /// Entering the segment tool shows the model mask with it.
   void selectTool(EditorTool tool) {
     _tool = _tool == tool ? .pan : tool;
     _activeMark = null;
+    if (_tool == .segment) _segmentationEnabled = true;
     notifyListeners();
   }
 
@@ -90,12 +125,6 @@ class ImageEditorState extends ChangeNotifier {
 
   void resetAdjustment(EditorTool tool) {
     _adjustments[tool] = 0;
-    _resetCount++;
-    notifyListeners();
-  }
-
-  void resetAdjustments() {
-    _adjustments.updateAll((_, _) => 0);
     _resetCount++;
     notifyListeners();
   }
@@ -136,19 +165,35 @@ class ImageEditorState extends ChangeNotifier {
   }
 
   /// Opens an existing mark for (re)labelling; null closes the label panel.
+  /// Selection is UI state only and never marks the draft as changed, so
+  /// merely opening the panel cannot flip a returned case to "in review".
   void selectMark(int? index) {
     if (_locked) return;
     _activeMark = index;
-    _markRevision++;
     notifyListeners();
   }
 
   /// Labels the active mark and closes the label panel.
-  void labelActiveMark(LesionType lesion) {
+  void labelActiveMark(LesionType lesion) => updateActiveMark(lesion: lesion);
+
+  /// Saves the active mark's finding and comment, then closes the label
+  /// panel. Either may be left unchanged by passing null.
+  void updateActiveMark({LesionType? lesion, String? note}) {
     final index = _activeMark;
-    if (index == null) return;
-    _marks[index].lesion = lesion;
+    if (index == null || _locked) return;
+    if (lesion != null) _marks[index].lesion = lesion;
+    if (note != null) _marks[index].note = note;
     _activeMark = null;
+    _markRevision++;
+    notifyListeners();
+  }
+
+  /// Rewrites the active mark's comment without closing the label panel.
+  void setActiveMarkNote(String note) {
+    final index = _activeMark;
+    if (index == null || _locked) return;
+    if (_marks[index].note == note) return;
+    _marks[index].note = note;
     _markRevision++;
     notifyListeners();
   }
@@ -178,6 +223,80 @@ class ImageEditorState extends ChangeNotifier {
 
   void setXai(bool enabled) {
     _xaiEnabled = enabled;
+    notifyListeners();
+  }
+
+  void setSegmentation(bool enabled) {
+    _segmentationEnabled = enabled;
+    notifyListeners();
+  }
+
+  /// Picks the correction brush; each subtool remembers its own width.
+  void selectSegmentSubtool(SegmentSubtool subtool) {
+    _segmentSubtool = subtool;
+    notifyListeners();
+  }
+
+  void setMaskWidth(double width) {
+    _maskWidths[_segmentSubtool] = width.clamp(
+      AppSizes.maskEditMinWidth,
+      AppSizes.maskEditMaxWidth,
+    );
+    notifyListeners();
+  }
+
+  /// Replaces all mask corrections, e.g. with the ones saved on the backend.
+  void replaceMaskEdits(Iterable<MaskEdit> edits) {
+    _maskEdits
+      ..clear()
+      ..addAll(edits);
+    _editingMask = false;
+    _maskRevision++;
+    notifyListeners();
+  }
+
+  void startMaskStroke(Offset point) {
+    if (_locked) return;
+    _maskEdits.add(
+      MaskEdit(
+        [point],
+        kind: _segmentSubtool == .eraser ? .erase : .add,
+        tool: _segmentSubtool == .pen ? .pen : .brush,
+        width: maskWidth,
+      ),
+    );
+    _editingMask = true;
+    _maskRevision++;
+    notifyListeners();
+  }
+
+  void extendMaskStroke(Offset point) {
+    if (!_editingMask) return;
+    _maskEdits.last.points.add(point);
+    _maskRevision++;
+    notifyListeners();
+  }
+
+  void endMaskStroke() {
+    if (!_editingMask) return;
+    _editingMask = false;
+    notifyListeners();
+  }
+
+  void undoMaskEdit() {
+    if (_locked || _maskEdits.isEmpty) return;
+    _maskEdits.removeLast();
+    _editingMask = false;
+    _maskRevision++;
+    notifyListeners();
+  }
+
+  /// Drops every correction, showing the model mask as it was made.
+  void clearMaskEdits() {
+    if (_locked || _maskEdits.isEmpty) return;
+    _maskEdits.clear();
+    _editingMask = false;
+    _maskRevision++;
     notifyListeners();
   }
 

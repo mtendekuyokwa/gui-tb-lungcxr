@@ -1,5 +1,4 @@
 import 'package:gui_lungcxr/feature_home/screens/home.dart';
-import 'package:gui_lungcxr/api/models.dart';
 import 'package:gui_lungcxr/feature_admin/screens/admin_home.dart';
 import 'package:gui_lungcxr/feature_admin/state/admin_state.dart';
 import 'package:gui_lungcxr/feature_auth/screens/login_screen.dart';
@@ -13,7 +12,7 @@ import 'package:provider/provider.dart';
 void main() {
   runApp(
     ChangeNotifierProvider(
-      create: (_) => SessionState(),
+      create: (_) => SessionState()..restore(),
       child: const Application(),
     ),
   );
@@ -34,9 +33,10 @@ class Application extends StatelessWidget {
     // There is a known issue with implicitly animated widgets where their transition occurs AFTER the theme's.
     // See https://github.com/duobaseio/forui/issues/670.
     theme: lightTheme.toApproximateMaterialTheme(),
-    darkTheme: darkTheme.toApproximateMaterialTheme(),
+    themeMode: ThemeMode.light,
     builder: (context, child) => FTheme(
-      data: Theme.brightnessOf(context) == .light ? lightTheme : darkTheme,
+      // Light mode only, whatever the platform brightness.
+      data: lightTheme,
       child: FToaster(child: FTooltipGroup(child: child!)),
     ),
     home: const FScaffold(child: AppGate()),
@@ -44,14 +44,20 @@ class Application extends StatelessWidget {
 }
 
 /// Shows the login screen, or the workspace for the signed-in user's role.
+/// While a stored session is being checked, shows a loading state so the
+/// login screen never flashes for a signed-in user.
 class AppGate extends StatelessWidget {
   const new({super.key});
 
   @override
   Widget build(BuildContext context) {
-    final user = context.select<SessionState, AppUser?>((s) => s.user);
+    final session = context.watch<SessionState>();
+    if (session.restoring) {
+      return const Center(child: FCircularProgress());
+    }
+    final user = session.user;
     if (user == null) return const LoginScreen();
-    final api = context.read<SessionState>().api;
+    final api = session.api;
     // Keyed by user so nothing from one session leaks into the next.
     if (user.isAdmin) {
       return ChangeNotifierProvider(

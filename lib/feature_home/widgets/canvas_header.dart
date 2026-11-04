@@ -33,67 +33,90 @@ class CanvasHeader extends StatelessWidget {
           horizontal: AppSizes.gap16,
           vertical: AppSizes.gap10,
         ),
-        child: Row(
-          spacing: AppSizes.gap12,
-          children: [
-            PatientAvatar(initials: patient.initials, size: AppSizes.avatarMd),
-            Expanded(
-              child: Column(
-                crossAxisAlignment: .start,
-                mainAxisSize: .min,
-                spacing: AppSizes.gap2,
-                children: [
-                  Text(
-                    patient.patientName,
-                    overflow: .ellipsis,
-                    style: theme.typography.body.md.copyWith(fontWeight: .w600),
-                  ),
-                  Text.rich(
-                    TextSpan(
-                      children: [
-                        const TextSpan(text: '${Strings.clientId}  '),
-                        TextSpan(
-                          text: patient.displayId,
-                          style: TextStyle(
-                            color: theme.colors.foreground,
-                            fontFeatures: const [.tabularFigures()],
-                          ),
+        child: LayoutBuilder(
+          builder: (context, constraints) {
+            // The signed-in name is decoration; on narrow screens the
+            // avatar, patient and status need the room more.
+            final wide = constraints.maxWidth >= AppSizes.narrowBreakpoint;
+            return Row(
+              spacing: AppSizes.gap12,
+              children: [
+                PatientAvatar(
+                  initials: patient.initials,
+                  size: AppSizes.avatarMd,
+                ),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: .start,
+                    mainAxisSize: .min,
+                    spacing: AppSizes.gap2,
+                    children: [
+                      Text(
+                        patient.patientName,
+                        overflow: .ellipsis,
+                        style: theme.typography.body.md.copyWith(
+                          fontWeight: .w600,
                         ),
-                      ],
-                    ),
-                    style: muted,
+                      ),
+                      Text.rich(
+                        TextSpan(
+                          children: [
+                            const TextSpan(text: '${Strings.clientId}  '),
+                            TextSpan(
+                              text: patient.displayId,
+                              style: TextStyle(
+                                color: theme.colors.foreground,
+                                fontFeatures: const [.tabularFigures()],
+                              ),
+                            ),
+                            if (patient.hospitalName case final hospital?)
+                              TextSpan(text: '  ·  $hospital'),
+                          ],
+                        ),
+                        maxLines: 1,
+                        overflow: .ellipsis,
+                        style: muted,
+                      ),
+                    ],
                   ),
-                ],
-              ),
-            ),
-            FBadge(
-              variant: switch (patient.status) {
-                CaseStatus.returned => .destructive,
-                CaseStatus.submitted || CaseStatus.accepted => .secondary,
-                _ => .outline,
-              },
-              child: Text(patient.status.label),
-            ),
-            Text(session.user?.fullName ?? '', style: muted),
-            FTooltip(
-              tipBuilder: (_, _) => const Text(Strings.refresh),
-              child: FButton.icon(
-                variant: .ghost,
-                size: .sm,
-                onPress: cases.load,
-                child: const Icon(FLucideIcons.refreshCw),
-              ),
-            ),
-            FTooltip(
-              tipBuilder: (_, _) => const Text(Strings.signOut),
-              child: FButton.icon(
-                variant: .ghost,
-                size: .sm,
-                onPress: session.logout,
-                child: const Icon(FLucideIcons.logOut),
-              ),
-            ),
-          ],
+                ),
+                FBadge(
+                  variant: switch (patient.status) {
+                    CaseStatus.returned => .destructive,
+                    CaseStatus.submitted || CaseStatus.accepted => .secondary,
+                    _ => .outline,
+                  },
+                  child: Text(patient.status.label),
+                ),
+                if (wide)
+                  Flexible(
+                    child: Text(
+                      session.user?.fullName ?? '',
+                      style: muted,
+                      overflow: .ellipsis,
+                    ),
+                  ),
+                FTooltip(
+                  tipBuilder: (_, _) => const Text(Strings.refresh),
+                  child: FButton.icon(
+                    variant: .ghost,
+                    size: .sm,
+                    onPress: cases.load,
+                    child: const Icon(FLucideIcons.refreshCw),
+                  ),
+                ),
+                FTooltip(
+                  tipBuilder: (_, _) => const Text(Strings.signOut),
+                  child: FButton.icon(
+                    variant: .ghost,
+                    size: .sm,
+                    onPress: session.logout,
+                    child: const Icon(FLucideIcons.logOut),
+                  ),
+                ),
+              ],
+            );
+          },
         ),
       ),
     );

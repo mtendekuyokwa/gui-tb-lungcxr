@@ -6,7 +6,7 @@ String adjustmentLabel(EditorTool tool) => switch (tool) {
   .contrast => Strings.Contrast,
   .hue => Strings.Hue,
   .saturation => Strings.Saturation,
-  .pan || .mark => '',
+  .pan || .mark || .segment => '',
 };
 
 /// Displays a -1..1 value as -100..100 (hue as degrees).

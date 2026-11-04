@@ -18,6 +18,7 @@ import 'package:gui_lungcxr/feature_auth/state/session_state.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 import 'package:gui_lungcxr/feature_home/models/lesion.dart';
 import 'package:gui_lungcxr/feature_home/state/case_state.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // A 1x1 grey PNG.
 final _png = base64Decode(
@@ -34,6 +35,7 @@ void main() {
     'upload → assign → review → return → resubmit → accept',
     skip: configured ? false : 'LUNGCXR_LIVE_* not set',
     () async {
+      SharedPreferences.setMockInitialValues({});
       Future<SessionState> signIn(List<String> login) async {
         final session = SessionState(api: ApiClient(baseUrl: url));
         addTearDown(session.dispose);
@@ -61,7 +63,10 @@ void main() {
       expect(uploaded, isTrue, reason: admin.error);
       final created = admin.cases.firstWhere((c) => c.patientName == name);
       expect(created.status, CaseStatus.unassigned);
-      expect(created.prediction?.state, 'queued');
+      // The dev server runs the model inside the upload request, so the
+      // reading may already be done/failed; without models it stays queued
+      // for the worker.
+      expect(created.prediction?.state, isIn(['queued', 'done', 'failed']));
 
       final doctorSession = await signIn(doctorLogin!);
       final doctor = admin.doctors.firstWhere(

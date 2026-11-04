@@ -30,6 +30,7 @@ Map<String, dynamic> caseJson(
   String status = 'assigned',
   Map<String, dynamic>? review,
   String name = 'Jane Banda',
+  String predictionState = 'done',
 }) => {
   'id': id,
   'status': status,
@@ -43,10 +44,11 @@ Map<String, dynamic> caseJson(
   },
   'prediction': {
     'id': id,
-    'state': 'done',
+    'state': predictionState,
     'label': 'tb',
     'tb_probability': 0.97,
     'has_overlay': false,
+    'has_mask': true,
   },
   'review': review,
   'return_note': null,
@@ -57,6 +59,19 @@ Map<String, dynamic> caseJson(
 
 /// In-memory stand-in for the Flask backend, just enough for the app's calls.
 class FakeBackend {
+  /// A dashboard queue of the cases in [status], as the backend sends it.
+  Map<String, dynamic> _queue(String status) {
+    final rows = [
+      for (final c in cases.values)
+        if (c['status'] == status)
+          {...c, 'waiting_since': '2026-01-01T00:00:00Z'},
+    ];
+    return {'count': rows.length, 'cases': rows};
+  }
+
+  int _countStatus(Set<String> statuses) =>
+      cases.values.where((c) => statuses.contains(c['status'])).length;
+
   FakeBackend({this.role = 'doctor'});
 
   final String role;
@@ -68,9 +83,34 @@ class FakeBackend {
   /// Every request as "METHOD /path".
   final List<String> log = [];
 
+  /// Cases the doctor took off their list.
+  final Set<int> hidden = {};
+
+  /// In-memory hospitals table.
+  final List<Map<String, dynamic>> hospitals = [
+    {'id': 1, 'name': 'Kamuzu Central'},
+  ];
+
+  /// Raw multipart body of the last case the doctor filed.
+  String? lastUploadBody;
+
   /// Bodies of review saves, in order.
   final List<Map<String, dynamic>> saved = [];
   bool failSaves = false;
+
+  /// In-memory users table, so user CRUD can be tested.
+  final Map<int, Map<String, dynamic>> users = {
+    2: {
+      'id': 2,
+      'email': 'doc@test',
+      'full_name': 'Doc One',
+      'role': 'doctor',
+      'active': true,
+    },
+  };
+
+  /// Body of the last assign call, so tests can assert the due date.
+  Map<String, dynamic>? lastAssign;
 
   late final ApiClient api = ApiClient(
     baseUrl: 'http://test',
@@ -86,7 +126,12 @@ class FakeBackend {
   Future<http.Response> _handle(http.Request request) async {
     final path = request.url.path;
     final method = request.method;
-    log.add('$method $path');
+    // Keep the query so tests can assert which filter was requested.
+    log.add(
+      request.url.query.isEmpty
+          ? '$method $path'
+          : '$method $path?${request.url.query}',
+    );
 
     if (path == '/auth/login') {
       final body = jsonDecode(request.body);
@@ -107,26 +152,149 @@ class FakeBackend {
     if (request.headers['Authorization'] != 'Bearer token-1') {
       return _json({'error': 'Missing bearer token.'}, 401);
     }
+    if (path == '/cases' && method == 'POST') {
+      lastUploadBody = utf8.decode(request.bodyBytes, allowMalformed: true);
+      cases[3] = caseJson(3, name: 'New Upload');
+      return _json(cases[3]!, 201);
+    }
+    if (path == '/auth/me') {
+      return _json({
+        'id': role == 'admin' ? 1 : 2,
+        'email': role == 'admin' ? 'admin@test' : 'doc@test',
+        'full_name': role == 'admin' ? 'Admin' : 'Doc One',
+        'role': role,
+        'active': true,
+      });
+    }
     if (path == '/catalog') return _json(_catalog);
-    if (path == '/cases' || path == '/admin/cases') {
-      return _json(cases.values.toList());
+    if (path == '/patients') {
+      final query = request.url.queryParameters['q'] ?? '';
+      return _json([
+        if ('jane banda'.contains(query.toLowerCase()))
+          {
+            'id': 7,
+            'name': 'Jane Banda',
+            'hospital_number': 'HU-42',
+            'sex': 'female',
+            'birth_year': 1987,
+          },
+      ]);
+    }
+    if (path == '/hospitals' && method == 'POST') {
+      final name = (jsonDecode(request.body)['name'] as String).trim();
+      final hospital = {'id': hospitals.length + 1, 'name': name};
+      hospitals.add(hospital);
+      return _json(hospital, 201);
+    }
+    if (path == '/hospitals') {
+      final query = (request.url.queryParameters['q'] ?? '').toLowerCase();
+      return _json([
+        for (final h in hospitals)
+          if ((h['name'] as String).toLowerCase().contains(query)) h,
+      ]);
+    }
+    if (path == '/cases') {
+      return _json([
+        for (final c in cases.values)
+          if (!hidden.contains(c['id'])) c,
+      ]);
+    }
+    if (path == '/admin/stats') {
+      return _json({
+        // Statuses counted from the actual cases, so the dashboard and
+        // charts answer with the queue's real shape.
+        'by_status': {
+          for (final c in cases.values)
+            c['status']: cases.values
+                .where((o) => o['status'] == c['status'])
+                .length,
+        },
+        'doctors': [
+          {
+            'doctor': {
+              'id': 2,
+              'email': 'doc@test',
+              'full_name': 'Doc One',
+              'role': 'doctor',
+              'active': true,
+            },
+            // Counted from the cases, as the backend does per doctor.
+            'open': _countStatus(const {'assigned', 'in_review', 'returned'}),
+            'submitted': _countStatus(const {'submitted'}),
+            'accepted': _countStatus(const {'accepted'}),
+          },
+        ],
+        'model_agreement': {'compared': 0, 'agreed': 0, 'rate': null},
+        'queues': {
+          'sign_off': _queue('submitted'),
+          'overdue': {'count': 0, 'cases': []},
+          'unassigned': _queue('unassigned'),
+        },
+        'verdicts': {
+          for (final option in _catalog['verdicts']!) option['code']: 0,
+        },
+        'model_feedback': {
+          for (final option in _catalog['feedback_kinds']!) option['code']: 0,
+        },
+      });
+    }
+    if (path == '/admin/export') {
+      final kind = request.url.queryParameters['kind'] ?? 'reviews';
+      return http.Response(
+        kind == 'model_feedback'
+            ? 'case_id,doctor_id,feedback_kind\n1,2,false_negative\n'
+            : 'case_id,doctor_id,verdict\n1,2,tb_suspected\n',
+        200,
+        headers: {'content-type': 'text/csv'},
+      );
+    }
+    if (path == '/admin/cases') {
+      final status = request.url.queryParameters['status'];
+      final doctor = request.url.queryParameters['doctor'];
+      final flag = request.url.queryParameters['flag'];
+      return _json([
+        for (final c in cases.values)
+          if ((status == null || c['status'] == status) &&
+              (doctor == null ||
+                  (c['assigned_to'] as Map)['id'].toString() == doctor) &&
+              (flag == null ||
+                  (flag == 'model_wrong' && c['model_wrong'] == true) ||
+                  (flag == 'needs_testing' && c['needs_testing'] == true)))
+            c,
+      ]);
+    }
+    if (path == '/admin/users' && method == 'POST') {
+      final body = jsonDecode(request.body);
+      users[3] = {
+        'id': 3,
+        'email': body['email'],
+        'full_name': body['full_name'],
+        'role': body['role'],
+        'active': true,
+      };
+      return _json(users[3]!, 201);
     }
     if (path == '/admin/users') {
-      return _json([
-        {
-          'id': 2,
-          'email': 'doc@test',
-          'full_name': 'Doc One',
-          'role': 'doctor',
-          'active': true,
-        },
-      ]);
+      return _json(users.values.toList());
+    }
+    final userMatch = RegExp(r'^/admin/users/(\d+)$').firstMatch(path);
+    if (userMatch != null) {
+      if (method != 'PATCH') return _json({'error': 'Not found.'}, 404);
+      final user = users[int.parse(userMatch.group(1)!)];
+      if (user == null) return _json({'error': 'User not found.'}, 404);
+      final body = jsonDecode(request.body) as Map<String, dynamic>;
+      if (body.containsKey('active')) user['active'] = body['active'];
+      if (body.containsKey('full_name')) {
+        user['full_name'] = body['full_name'];
+      }
+      return _json(user);
     }
     if (path == '/admin/cases/assign') {
       final body = jsonDecode(request.body);
       for (final id in body['case_ids'] as List) {
         cases[id]!['status'] = 'assigned';
       }
+      lastAssign = body as Map<String, dynamic>;
       return _json([]);
     }
 
@@ -150,6 +318,7 @@ class FakeBackend {
           'verdict': body['verdict'],
           'note': body['note'],
           'marks': body['marks'],
+          'mask_edits': body['mask_edits'] ?? [],
           'disease_tags': [
             for (final code in body['disease_tags'] as List) {'code': code},
           ],
@@ -160,6 +329,24 @@ class FakeBackend {
       case ('POST', '/review/submit'):
         item['status'] = 'submitted';
         (item['review'] as Map)['state'] = 'submitted';
+      case ('POST', '/hide'):
+        hidden.add(item['id'] as int);
+        return http.Response('', 204);
+      case ('POST', '/unhide'):
+        hidden.remove(item['id']);
+      case ('POST', '/reevaluate'):
+        final edits = (item['review'] as Map?)?['mask_edits'] as List?;
+        if (edits == null || edits.isEmpty) {
+          return _json({'error': 'Correct the lung mask first.'}, 422);
+        }
+        (item['review'] as Map)['mask_edits'] = <Object>[];
+        item['prediction'] = {
+          'id': (item['prediction'] as Map)['id'] + 100,
+          'state': 'queued',
+          'has_overlay': false,
+          'has_mask': true,
+          'edited_mask': true,
+        };
       case ('POST', '/accept'):
         item['status'] = 'accepted';
       case ('POST', '/return'):

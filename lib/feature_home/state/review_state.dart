@@ -49,13 +49,22 @@ class ReviewState extends ChangeNotifier {
   bool _saving = false;
   bool _applying = false;
   bool _disposed = false;
+  bool _submitting = false;
+  bool _reevaluating = false;
   int _seenMarkRevision = 0;
+  int _seenMaskRevision = 0;
 
   CxrCase? get detail => _detail;
   bool get loading => _loading;
   String? get error => _error;
   SaveStatus get saveStatus => _saveStatus;
   bool get editable => _detail?.status.editable ?? false;
+
+  /// True while [submit] runs.
+  bool get submitting => _submitting;
+
+  /// True while [reevaluate] runs.
+  bool get reevaluating => _reevaluating;
 
   String? get verdict => _verdict;
   String get note => _note;
@@ -115,9 +124,16 @@ class ReviewState extends ChangeNotifier {
   }
 
   void _onEditorChanged() {
-    if (editor.markRevision == _seenMarkRevision) return;
-    _seenMarkRevision = editor.markRevision;
-    if (!_applying && editable) _changed();
+    var changed = false;
+    if (editor.markRevision != _seenMarkRevision) {
+      _seenMarkRevision = editor.markRevision;
+      changed = true;
+    }
+    if (editor.maskRevision != _seenMaskRevision) {
+      _seenMaskRevision = editor.maskRevision;
+      changed = true;
+    }
+    if (changed && !_applying && editable) _changed();
   }
 
   void _changed() {
@@ -132,6 +148,7 @@ class ReviewState extends ChangeNotifier {
     verdict: _verdict,
     note: _note,
     marks: editor.marks,
+    maskEdits: editor.maskEdits,
     // Disease tags only mean something under the "other disease" verdict.
     diseases: _verdict == otherDisease ? _diseases.toList() : const [],
     feedbackKind: _feedbackKind,
@@ -167,24 +184,59 @@ class ReviewState extends ChangeNotifier {
 
   /// Saves, then locks the review and hands the case back to the admin.
   Future<bool> submit() async {
-    if (!canSubmit) return false;
-    _dirty = true; // always send the latest state before locking
-    await save();
-    if (_saveStatus == .failed || _dirty) return false;
+    if (!canSubmit || _submitting) return false;
+    _submitting = true;
+    _notify();
     try {
+      _dirty = true; // always send the latest state before locking
+      await save();
+      if (_saveStatus == .failed || _dirty) return false;
       _apply(await api.submitReview(caseId));
       _error = null;
       _saveStatus = .idle;
-      _notify();
       return true;
     } on ApiException catch (e) {
       _error = e.message;
-      _notify();
       return false;
+    } finally {
+      _submitting = false;
+      _notify();
     }
   }
 
-  void _apply(CxrCase detail, {bool loadDraft = false}) {
+  /// Whether the mask corrections can be sent back to the model. The
+  /// backend also needs a finished model mask; the caller checks that.
+  bool get canReevaluate =>
+      editable && editor.hasMaskEdits && !_reevaluating && !_submitting;
+
+  /// Saves the mask corrections, then has the model classify the X-ray
+  /// again with them baked into the lung mask. The corrections are cleared
+  /// afterwards: the new mask already contains them.
+  Future<bool> reevaluate() async {
+    if (!canReevaluate) return false;
+    _reevaluating = true;
+    _notify();
+    try {
+      _dirty = true; // the backend reads the saved draft's corrections
+      await save();
+      if (_saveStatus == .failed || _dirty) return false;
+      _apply(await api.reevaluate(caseId), reloadMaskEdits: true);
+      _error = null;
+      return true;
+    } on ApiException catch (e) {
+      _error = e.message;
+      return false;
+    } finally {
+      _reevaluating = false;
+      _notify();
+    }
+  }
+
+  void _apply(
+    CxrCase detail, {
+    bool loadDraft = false,
+    bool reloadMaskEdits = false,
+  }) {
     // A response can arrive after sign-out has disposed this and the editor.
     if (_disposed) return;
     _detail = detail;
@@ -207,8 +259,12 @@ class ReviewState extends ChangeNotifier {
         ..addAll(review?.tests ?? const []);
       _urgency = review?.urgency ?? defaultUrgency;
       editor.replaceMarks(review?.marks ?? const []);
+      editor.replaceMaskEdits(review?.maskEdits ?? const []);
+    } else if (reloadMaskEdits) {
+      editor.replaceMaskEdits(detail.review?.maskEdits ?? const []);
     }
     _seenMarkRevision = editor.markRevision;
+    _seenMaskRevision = editor.maskRevision;
     _applying = false;
     onCaseChanged(detail);
   }

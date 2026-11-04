@@ -46,3 +46,7 @@ app.*.map.json
 
 # Widget Preview related
 .widget_preview/
+
+# App: generated lung-mask cache and fine-tune training output
+server/.cache/
+server/pipline/training/finetune_external/

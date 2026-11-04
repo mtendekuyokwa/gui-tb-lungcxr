@@ -31,12 +31,12 @@ implemented **and** covered by a test.
 - [x] 17. Open a case: image, model reading and the doctor's review
 - [x] 18. Accept a submitted review, or return it with a note
 
-## Phase 4 — Not started
+## Phase 4 — Done
 
-- [ ] 19. Keep the session across a page reload (token is in memory only today)
-- [ ] 20. Admin: create and deactivate doctors
-- [ ] 21. Admin: export CSV and statistics screen
-- [ ] 22. Admin: filter by doctor and by flag; due dates
-- [ ] 23. Segment tool wired to the backend lung mask (needs the model worker)
+- [x] 19. Keep the session across a page reload (token is in local storage, rechecked via `GET /auth/me` on startup)
+- [x] 20. Admin: create and deactivate doctors
+- [x] 21. Admin: export CSV and statistics screen
+- [x] 22. Admin: filter by doctor and by flag; due dates
+- [x] 23. Segment tool wired to the backend lung mask (needs the model worker)
 - [ ] 24. Assistant chat: connect to a language model or remove the tab
-- [ ] 25. Narrow-screen layout for tablets and phones
+- [x] 25. Narrow-screen layout for tablets and phones (bottom tabs under 700px; headers hide decoration)

@@ -17,10 +17,15 @@ from .models import (
     ROLE_ADMIN,
     ROLE_DOCTOR,
     SUBMITTED,
+    QUEUED,
     Case,
     DiseaseTag,
+    Hospital,
     Mark,
+    MaskEdit,
     ModelFeedback,
+    Patient,
+    Prediction,
     Review,
     TestRequest,
     now,
@@ -65,10 +70,97 @@ def _send_stored(relative_path):
     return send_file(path, mimetype="image/png", max_age=0)
 
 
+@bp.post("/cases")
+@login_required(ROLE_DOCTOR)
+def create_case():
+    """The doctor uploads an X-ray and owns the case from the start."""
+    upload = request.files.get("image")
+    if upload is None:
+        raise ApiError(422, "An 'image' file is required.")
+    from .upload import create_case
+
+    case = create_case(
+        upload,
+        request.form,
+        assigned_to=g.user.id,
+        assigned_by=g.user.id,
+        note=f"self-uploaded by {g.user.full_name}",
+    )
+    return jsonify(_detail(case)), 201
+
+
+@bp.get("/patients")
+@login_required()
+def search_patients():
+    """Patient lookup (name or hospital number) so a returning patient can be
+    reused instead of retyped. Both admins and doctors upload cases, so both
+    may search."""
+    query = (request.args.get("q") or "").strip()
+    if len(query) < 2:
+        return jsonify([])
+    pattern = f"%{query}%"
+    matches = (
+        Patient.query.filter(
+            db.or_(
+                Patient.name.ilike(pattern),
+                Patient.hospital_number.ilike(pattern),
+            )
+        )
+        .order_by(Patient.name)
+        .limit(8)
+        .all()
+    )
+    return jsonify([p.to_dict() for p in matches])
+
+
+HOSPITAL_SUGGESTIONS = 8
+HOSPITAL_LIST_LIMIT = 500
+
+
+@bp.get("/hospitals")
+@login_required()
+def list_hospitals():
+    """Hospital lookup for the upload form. With ``q`` the best few name
+    matches; without it every hospital (the admin's list), by name."""
+    query = (request.args.get("q") or "").strip()
+    hospitals = Hospital.query.order_by(Hospital.name)
+    if query:
+        hospitals = hospitals.filter(Hospital.name.ilike(f"%{query}%")).limit(
+            HOSPITAL_SUGGESTIONS)
+    else:
+        hospitals = hospitals.limit(HOSPITAL_LIST_LIMIT)
+    return jsonify([h.to_dict() for h in hospitals])
+
+
+@bp.post("/hospitals")
+@login_required()
+def create_hospital():
+    """Adds a hospital, from the admin's list or straight from the upload
+    form. A name that already exists (ignoring case) returns that hospital,
+    so "create" from a stale suggestion list never duplicates one."""
+    name = json_body().get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ApiError(422, "A hospital 'name' is required.")
+    name = " ".join(name.split())
+    if len(name) > 255:
+        raise ApiError(422, "'name' must be at most 255 characters.")
+    existing = Hospital.query.filter(db.func.lower(Hospital.name) == name.lower()).first()
+    if existing is not None:
+        return jsonify(existing.to_dict()), 200
+    hospital = Hospital(name=name)
+    db.session.add(hospital)
+    db.session.commit()
+    return jsonify(hospital.to_dict()), 201
+
+
 @bp.get("/cases")
 @login_required(ROLE_DOCTOR)
 def list_cases():
-    query = Case.query.filter_by(assigned_to=g.user.id)
+    # Cases the doctor hid stay out of their list (the admin still sees them).
+    query = Case.query.filter(
+        Case.assigned_to == g.user.id,
+        db.or_(Case.hidden_by.is_(None), Case.hidden_by != g.user.id),
+    )
     status = request.args.get("status")
     if status:
         if status not in CASE_STATUSES:
@@ -88,6 +180,70 @@ def get_case(case_id):
     return jsonify(_detail(case))
 
 
+@bp.post("/cases/<int:case_id>/hide")
+@login_required(ROLE_DOCTOR)
+def hide_case(case_id):
+    """Takes the case off the doctor's own list. Nothing is deleted or
+    reassigned; the admin sees it as before and ``/unhide`` brings it back."""
+    case = _my_case(case_id)
+    case.hidden_by = g.user.id
+    audit(case, "hidden")
+    db.session.commit()
+    return "", 204
+
+
+@bp.post("/cases/<int:case_id>/unhide")
+@login_required(ROLE_DOCTOR)
+def unhide_case(case_id):
+    case = _my_case(case_id)
+    if case.hidden_by is not None:
+        case.hidden_by = None
+        audit(case, "unhidden")
+        db.session.commit()
+    return jsonify(_detail(case))
+
+
+@bp.post("/cases/<int:case_id>/reevaluate")
+@login_required(ROLE_DOCTOR)
+def reevaluate_case(case_id):
+    """Runs the classifier again on the doctor's corrected lung mask.
+
+    The saved draft's mask edits are baked into a new mask image, which a new
+    prediction uses instead of the segmenter's; the edits are then cleared
+    from the draft because the new mask already contains them. Earlier
+    predictions stay as history.
+    """
+    case = _my_case(case_id)
+    if case.status not in OPEN_STATUSES:
+        raise ApiError(409, "This case is not open for editing.")
+    current = case.prediction
+    if current is None or not current.mask_path:
+        raise ApiError(409, "There is no lung mask to correct yet.")
+    if current.state == QUEUED:
+        raise ApiError(409, "The model is still reading this case.")
+    review = case.review_by(g.user.id)
+    if review is None or not review.mask_edits:
+        raise ApiError(422, "Correct the lung mask before re-evaluating.")
+
+    from .remask import bake
+
+    prediction = Prediction(state=QUEUED)
+    case.predictions.append(prediction)
+    db.session.flush()  # assigns prediction.id, which names the mask file
+    prediction.input_mask_path = bake(
+        current.mask_path, review.mask_edits, f"masks/{case.id}-{prediction.id}.png")
+    review.mask_edits = []
+    review.updated_at = now()
+    if case.status != IN_REVIEW:
+        case.status = IN_REVIEW
+    audit(case, "reevaluated", "with a corrected lung mask")
+    db.session.commit()
+    from .worker import run_model_inline
+
+    run_model_inline(case.id)
+    return jsonify(_detail(db.session.get(Case, case.id)))
+
+
 @bp.get("/cases/<int:case_id>/image")
 @login_required()
 def get_image(case_id):
@@ -101,11 +257,67 @@ def get_overlay(case_id):
     return _send_stored(prediction.overlay_path if prediction else None)
 
 
+MASK_EDIT_KINDS = ("add", "erase")
+MASK_EDIT_TOOLS = ("brush", "pen")
+# Stroke width as a fraction of the image width.
+MASK_EDIT_MIN_WIDTH = 0.002
+MASK_EDIT_MAX_WIDTH = 0.2
+
+
+def _parse_mask_edits(raw):
+    if not isinstance(raw, list):
+        raise ApiError(422, "'mask_edits' must be a list.")
+    edits = []
+    for item in raw:
+        if not isinstance(item, dict):
+            raise ApiError(422, "Each mask edit must be an object.")
+        kind = item.get("kind")
+        if not isinstance(kind, str) or kind not in MASK_EDIT_KINDS:
+            raise ApiError(422, f"Unknown mask edit kind: {kind!r}.")
+        tool = item.get("tool")
+        if not isinstance(tool, str) or tool not in MASK_EDIT_TOOLS:
+            raise ApiError(422, f"Unknown mask edit tool: {tool!r}.")
+        width = item.get("width")
+        if (
+            not isinstance(width, (int, float))
+            or isinstance(width, bool)
+            or not MASK_EDIT_MIN_WIDTH <= width <= MASK_EDIT_MAX_WIDTH
+        ):
+            raise ApiError(
+                422, "'mask edit width' must be between "
+                f"{MASK_EDIT_MIN_WIDTH} and {MASK_EDIT_MAX_WIDTH}.")
+        points = item.get("points")
+        if not isinstance(points, list) or not points:
+            raise ApiError(422, "Each mask edit needs a non-empty 'points' list.")
+        clean = []
+        for point in points:
+            ok = (
+                isinstance(point, list)
+                and len(point) == 2
+                and all(isinstance(v, (int, float)) and not isinstance(v, bool) for v in point)
+                and all(0 <= v <= 1 for v in point)
+            )
+            if not ok:
+                raise ApiError(
+                    422, "Mask edit points must be [x, y] pairs between 0 and 1.")
+            clean.append([float(point[0]), float(point[1])])
+        edits.append(MaskEdit(kind=kind, tool=tool, width=float(width), points=clean))
+    return edits
+
+
+@bp.get("/cases/<int:case_id>/mask")
+@login_required()
+def get_mask(case_id):
+    prediction = _viewable_case(case_id).prediction
+    return _send_stored(prediction.mask_path if prediction else None)
+
+
 def _text(value, field, limit=4000):
     if value is None:
         return ""
     if not isinstance(value, str) or len(value) > limit:
-        raise ApiError(422, f"'{field}' must be text of at most {limit} characters.")
+        raise ApiError(422, f"'{field}' must be text of at most {
+                       limit} characters.")
     return value.strip()
 
 
@@ -125,6 +337,7 @@ def _parse_marks(raw):
         finding = item.get("finding")
         if finding is not None:
             _code(finding, catalog.FINDINGS, "finding")
+        note = _text(item.get("note", ""), "marks.note", 2000)
         points = item.get("points")
         if not isinstance(points, list) or not points:
             raise ApiError(422, "Each mark needs a non-empty 'points' list.")
@@ -137,9 +350,10 @@ def _parse_marks(raw):
                 and all(0 <= v <= 1 for v in point)
             )
             if not ok:
-                raise ApiError(422, "Mark points must be [x, y] pairs between 0 and 1.")
+                raise ApiError(
+                    422, "Mark points must be [x, y] pairs between 0 and 1.")
             clean.append([float(point[0]), float(point[1])])
-        marks.append(Mark(points=clean, finding_code=finding))
+        marks.append(Mark(points=clean, finding_code=finding, note=note))
     return marks
 
 
@@ -151,10 +365,12 @@ def _parse_disease_tags(raw):
         if isinstance(item, str):
             item = {"code": item}
         if not isinstance(item, dict):
-            raise ApiError(422, "Each disease tag must be a code or an object.")
+            raise ApiError(
+                422, "Each disease tag must be a code or an object.")
         tags.append(
             DiseaseTag(
-                disease_code=_code(item.get("code"), catalog.DISEASES, "disease"),
+                disease_code=_code(
+                    item.get("code"), catalog.DISEASES, "disease"),
                 free_text=_text(item.get("free_text"), "free_text", 255),
             )
         )
@@ -168,11 +384,14 @@ def _parse_tests(raw):
         raise ApiError(422, "'further_testing' must be an object or null.")
     tests = raw.get("tests")
     if not isinstance(tests, list) or not tests:
-        raise ApiError(422, "'further_testing.tests' must list at least one test.")
-    urgency = _code(raw.get("urgency", "routine"), catalog.URGENCIES, "urgency")
+        raise ApiError(
+            422, "'further_testing.tests' must list at least one test.")
+    urgency = _code(raw.get("urgency", "routine"),
+                    catalog.URGENCIES, "urgency")
     free_text = _text(raw.get("free_text"), "free_text", 255)
     return [
-        TestRequest(test_code=_code(t, catalog.TESTS, "test"), urgency=urgency, free_text=free_text)
+        TestRequest(test_code=_code(t, catalog.TESTS, "test"),
+                    urgency=urgency, free_text=free_text)
         for t in dict.fromkeys(tests)
     ]
 
@@ -211,7 +430,7 @@ def _derive_feedback(review, prediction):
     feedback.kind = kind
     feedback.note = ""
     feedback.derived = True
-    feedback.prediction_id = prediction.id
+    feedback.prediction_id = prediction.id if prediction else None
     review.feedback = feedback
 
 
@@ -228,6 +447,8 @@ def save_review(case_id):
         _code(verdict, catalog.VERDICTS, "verdict")
     note = _text(data.get("note"), "note")
     marks = _parse_marks(data.get("marks", []))
+    raw_edits = data.get("mask_edits", [])
+    edits = _parse_mask_edits([] if raw_edits is None else raw_edits)
     tags = _parse_disease_tags(data.get("disease_tags", []))
     tests = _parse_tests(data.get("further_testing"))
 
@@ -238,6 +459,7 @@ def save_review(case_id):
     review.verdict = verdict
     review.note = note
     review.marks = marks
+    review.mask_edits = edits
     review.disease_tags = tags
     review.test_requests = tests
     review.updated_at = now()
@@ -260,7 +482,8 @@ def submit_review(case_id):
     if review is None or review.verdict is None:
         raise ApiError(422, "A verdict is required before submitting.")
     if review.verdict == "other_disease" and not review.disease_tags:
-        raise ApiError(422, "Tag at least one disease for 'Other disease suspected'.")
+        raise ApiError(
+            422, "Tag at least one disease for 'Other disease suspected'.")
 
     _derive_feedback(review, case.prediction)
     review.state = SUBMITTED

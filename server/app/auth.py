@@ -8,6 +8,12 @@ from .security import create_token, json_body, login_required
 bp = Blueprint("auth", __name__)
 
 
+@bp.get("/health")
+def health():
+    """Unauthenticated liveness check for the hosting platform."""
+    return jsonify(status="ok")
+
+
 @bp.post("/auth/login")
 def login():
     data = json_body()

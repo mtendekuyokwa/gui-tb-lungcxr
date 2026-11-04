@@ -7,6 +7,7 @@ import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 /// Second line of a case row: who has it and, once reviewed, the verdict.
 String caseRowDetails(CxrCase item, Catalog catalog) => [
   item.doctorName ?? Strings.statusUnassigned,
+  ?item.hospitalName,
   if (item.verdict != null) catalog.label(catalog.verdicts, item.verdict),
 ].join(' · ');
 
@@ -26,6 +27,14 @@ String marksSummary(Review review) {
   return '${review.marks.length} · ${findings.join(', ')}';
 }
 
+/// How many mask corrections the doctor painted, split by kind.
+String maskEditsSummary(Review review) {
+  if (review.maskEdits.isEmpty) return Strings.none;
+  final added = review.maskEdits.where((e) => e.kind == .add).length;
+  final removed = review.maskEdits.length - added;
+  return '${review.maskEdits.length} · $added ${Strings.maskEditsAdded} · $removed ${Strings.maskEditsRemoved}';
+}
+
 /// What kind of model error was flagged, by whom, and the doctor's note.
 String feedbackSummary(Review review, Catalog catalog) => [
   catalog.label(catalog.feedbackKinds, review.feedbackKind),
@@ -39,4 +48,18 @@ String testingSummary(Review review, Catalog catalog) {
       .map((code) => catalog.label(catalog.tests, code))
       .join(', ');
   return '$tests · ${catalog.label(catalog.urgencies, review.urgency)}';
+}
+
+/// What the assign card says about the ticked cases: how many, who holds
+/// them now, and how many hide under another status filter.
+String assignSummary(List<CxrCase> shown, int hidden) {
+  final holders = {
+    for (final c in shown) c.doctorName ?? Strings.statusUnassigned,
+  };
+  var text = '${shown.length + hidden} ${Strings.tickedCases}';
+  if (holders.isNotEmpty) {
+    text += ' · ${Strings.tickedNowWith} ${holders.join(', ')}';
+  }
+  if (hidden > 0) text += ' · $hidden ${Strings.tickedHidden}';
+  return text;
 }

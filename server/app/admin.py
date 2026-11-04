@@ -3,13 +3,12 @@
 import csv
 import io
 import json
-import pathlib
 from datetime import datetime, timezone
 
-from flask import Blueprint, Response, current_app, g, jsonify, request
-from PIL import Image, UnidentifiedImageError
+from flask import Blueprint, Response, g, jsonify, request
 from sqlalchemy import func
 
+from . import catalog
 from .cases import reopen
 from .errors import ApiError
 from .extensions import db
@@ -19,7 +18,6 @@ from .models import (
     CASE_STATUSES,
     DONE,
     OPEN_STATUSES,
-    QUEUED,
     RETURNED,
     ROLE_ADMIN,
     ROLE_DOCTOR,
@@ -27,8 +25,6 @@ from .models import (
     UNASSIGNED,
     Case,
     ModelFeedback,
-    Patient,
-    Prediction,
     Review,
     TestRequest,
     User,
@@ -48,7 +44,8 @@ UPLOAD_FORMATS = {"PNG", "JPEG"}
 
 def _password(value):
     if not isinstance(value, str) or len(value) < MIN_PASSWORD:
-        raise ApiError(422, f"Password must be at least {MIN_PASSWORD} characters.")
+        raise ApiError(422, f"Password must be at least {
+                       MIN_PASSWORD} characters.")
     return value
 
 
@@ -124,65 +121,15 @@ def _summary(case):
     }
 
 
-def _read_image(upload):
-    try:
-        image = Image.open(upload.stream)
-        if image.format not in UPLOAD_FORMATS:
-            raise ApiError(422, "Image must be PNG or JPEG.")
-        image.load()
-    except (UnidentifiedImageError, OSError):
-        raise ApiError(422, "Image must be PNG or JPEG.")
-    if image.mode not in ("L", "RGB", "RGBA", "I", "I;16"):
-        image = image.convert("RGB")
-    return image
-
-
-def _save_png(image, case_id):
-    relative = f"images/{case_id}.png"
-    path = pathlib.Path(current_app.config["STORAGE_DIR"]) / relative
-    path.parent.mkdir(parents=True, exist_ok=True)
-    image.save(path, format="PNG")
-    return relative
-
-
 @bp.post("/cases")
 @login_required(ROLE_ADMIN)
 def create_case():
     upload = request.files.get("image")
     if upload is None:
         raise ApiError(422, "An 'image' file is required.")
-    # Validated before any row is created, so a bad file leaves nothing behind.
-    image = _read_image(upload)
-    form = request.form
-    hospital_number = form.get("hospital_number", "").strip() or None
-    patient = (
-        Patient.query.filter_by(hospital_number=hospital_number).first()
-        if hospital_number
-        else None
-    )
-    if patient is None:
-        name = form.get("patient_name", "").strip()
-        if not name:
-            raise ApiError(422, "'patient_name' is required for a new patient.")
-        birth_year = form.get("birth_year", "").strip()
-        if birth_year and not birth_year.isdigit():
-            raise ApiError(422, "'birth_year' must be a number.")
-        patient = Patient(
-            hospital_number=hospital_number,
-            name=name,
-            sex=form.get("sex", "").strip() or None,
-            birth_year=int(birth_year) if birth_year else None,
-        )
-        db.session.add(patient)
+    from .upload import create_case
 
-    case = Case(patient=patient)
-    db.session.add(case)
-    db.session.flush()  # assigns case.id, which names the stored file
-    case.image_path = _save_png(image, case.id)
-    # The model worker (not built yet) picks up queued predictions.
-    case.predictions.append(Prediction(state=QUEUED))
-    audit(case, "created")
-    db.session.commit()
+    case = create_case(upload, request.form)
     return jsonify(_summary(case)), 201
 
 
@@ -202,9 +149,11 @@ def list_cases():
         query = query.filter(Case.assigned_to == int(doctor))
     flag = request.args.get("flag")
     if flag:
-        flagged = {"model_wrong": ModelFeedback, "needs_testing": TestRequest}.get(flag)
+        flagged = {"model_wrong": ModelFeedback,
+                   "needs_testing": TestRequest}.get(flag)
         if flagged is None:
-            raise ApiError(400, "'flag' must be 'model_wrong' or 'needs_testing'.")
+            raise ApiError(
+                400, "'flag' must be 'model_wrong' or 'needs_testing'.")
         # Only the current assignee's review counts, not an earlier doctor's draft.
         query = query.filter(
             Review.query.join(flagged, flagged.review_id == Review.id)
@@ -250,7 +199,8 @@ def assign_cases():
     ):
         raise ApiError(422, "'case_ids' must be a non-empty list of case ids.")
     doctor_id = data.get("doctor_id")
-    doctor = db.session.get(User, doctor_id) if isinstance(doctor_id, int) else None
+    doctor = db.session.get(User, doctor_id) if isinstance(
+        doctor_id, int) else None
     if doctor is None or doctor.role != ROLE_DOCTOR or not doctor.active:
         raise ApiError(422, "'doctor_id' must be an active doctor.")
     due_at = _parse_due(data.get("due_at"))
@@ -259,9 +209,11 @@ def assign_cases():
     if len(cases) != len(set(case_ids)):
         raise ApiError(404, "One or more cases were not found.")
     # Checked up front so a bulk assignment is all or nothing.
-    locked = [c.id for c in cases if c.status not in (UNASSIGNED, *OPEN_STATUSES)]
+    locked = [c.id for c in cases if c.status not in (
+        UNASSIGNED, *OPEN_STATUSES)]
     if locked:
-        raise ApiError(409, f"Cases already submitted or accepted cannot be reassigned: {locked}.")
+        raise ApiError(
+            409, f"Cases already submitted or accepted cannot be reassigned: {locked}.")
 
     for case in cases:
         if case.assigned_to == doctor.id:
@@ -274,6 +226,7 @@ def assign_cases():
         case.assigned_at = now()
         case.due_at = due_at
         case.status = ASSIGNED
+        case.hidden_by = None
         audit(case, action, f"to {doctor.full_name}")
     db.session.commit()
     return jsonify([_summary(c) for c in cases])
@@ -301,6 +254,7 @@ def return_case(case_id):
     if not isinstance(note, str) or not note.strip():
         raise ApiError(422, "A 'note' explaining the return is required.")
     case.status = RETURNED
+    case.hidden_by = None  # the doctor must see what came back to them
     reopen(case.current_review)
     audit(case, "returned", note.strip())
     db.session.commit()
@@ -349,8 +303,10 @@ def export():
         for r in _submitted_reviews():
             p = r.case.prediction
             rows.append([
-                r.case_id, r.doctor_id, r.case.status, r.verdict, r.note, len(r.marks),
-                ";".join(sorted({m.finding_code for m in r.marks if m.finding_code})),
+                r.case_id, r.doctor_id, r.case.status, r.verdict, r.note, len(
+                    r.marks),
+                ";".join(
+                    sorted({m.finding_code for m in r.marks if m.finding_code})),
                 ";".join(t.disease_code for t in r.disease_tags),
                 p.label if p else None, p.tb_probability if p else None,
                 r.feedback.kind if r.feedback else None,
@@ -365,23 +321,58 @@ def export():
             "tb_probability", "feedback_kind", "derived", "feedback_note", "verdict", "marks",
         ]
         rows = []
-        for r in _submitted_reviews().join(ModelFeedback):
+        for r in _submitted_reviews().join(ModelFeedback, ModelFeedback.review_id == Review.id):
             p = r.feedback.prediction
             rows.append([
                 r.case_id, r.doctor_id, r.feedback.prediction_id,
                 p.model_version if p else None, p.label if p else None,
                 p.tb_probability if p else None, r.feedback.kind, r.feedback.derived,
                 r.feedback.note, r.verdict,
-                json.dumps([{"finding": m.finding_code, "points": m.points} for m in r.marks]),
+                json.dumps([{"finding": m.finding_code, "note": m.note or "", "points": m.points}
+                           for m in r.marks]),
             ])
         return _csv_response("model_feedback", header, rows)
     raise ApiError(400, "'kind' must be 'reviews' or 'model_feedback'.")
 
 
+QUEUE_SIZE = 5
+
+
+def _queue(query, since, limit=QUEUE_SIZE):
+    """The longest-waiting cases of one dashboard queue, with the moment
+    each started waiting, plus how many the queue holds in all."""
+    rows = query.order_by(since).all()
+    return {
+        "count": len(rows),
+        "cases": [{**_summary(c), "waiting_since": iso(w)} for c, w in rows[:limit]],
+    }
+
+
+def _queues():
+    """What waits for the admin: reviews to sign off, cases past their due
+    date, and cases nobody has been given yet. Oldest first in each."""
+    sign_off = (
+        db.session.query(Case, Review.submitted_at)
+        .join(Review, (Review.case_id == Case.id) & (Review.doctor_id == Case.assigned_to))
+        .filter(Case.status == SUBMITTED)
+    )
+    overdue = (
+        db.session.query(Case, Case.due_at)
+        .filter(Case.status.in_(OPEN_STATUSES), Case.due_at.isnot(None), Case.due_at < now())
+    )
+    unassigned = db.session.query(Case, Case.created_at).filter(Case.status == UNASSIGNED)
+    return {
+        "sign_off": _queue(sign_off, Review.submitted_at),
+        "overdue": _queue(overdue, Case.due_at),
+        "unassigned": _queue(unassigned, Case.created_at),
+    }
+
+
 @bp.get("/stats")
 @login_required(ROLE_ADMIN)
 def stats():
-    counts = dict(db.session.query(Case.status, func.count()).group_by(Case.status).all())
+    counts = dict(db.session.query(
+        Case.status, func.count()).group_by(Case.status).all())
     by_status = {status: counts.get(status, 0) for status in CASE_STATUSES}
 
     workload = {}
@@ -391,10 +382,22 @@ def stats():
         .group_by(Case.assigned_to, Case.status)
     )
     for doctor_id, status, count in rows:
-        entry = workload.setdefault(doctor_id, {"open": 0, "submitted": 0, "accepted": 0})
+        entry = workload.setdefault(
+            doctor_id, {"open": 0, "submitted": 0, "accepted": 0})
         entry["open" if status in OPEN_STATUSES else status] += count
+    oldest_open = dict(
+        db.session.query(Case.assigned_to, func.min(Case.assigned_at))
+        .filter(Case.assigned_to.isnot(None), Case.status.in_(OPEN_STATUSES))
+        .group_by(Case.assigned_to)
+        .all()
+    )
     doctors = [
-        {"doctor": u.to_dict(), **workload.get(u.id, {"open": 0, "submitted": 0, "accepted": 0})}
+        {
+            "doctor": u.to_dict(),
+            **workload.get(u.id, {"open": 0, "submitted": 0, "accepted": 0}),
+            # When the doctor's longest-waiting open case was handed over.
+            "oldest_open_since": iso(oldest_open.get(u.id)),
+        }
         for u in User.query.filter_by(role=ROLE_DOCTOR).order_by(User.full_name)
     ]
 
@@ -406,11 +409,35 @@ def stats():
             continue
         if review.verdict not in ("tb_suspected", "no_tb"):
             continue
+        prediction_is_tb = prediction.label == "tb"
+        verdict_is_tb = review.verdict == "tb_suspected"
         compared += 1
-        agreed += (prediction.label == "tb") == (review.verdict == "tb_suspected")
+        agreed += int(prediction_is_tb == verdict_is_tb)
+    # What doctors concluded, and how they said the model was wrong.
+    verdicts = {code: 0 for code in catalog.VERDICTS}
+    verdict_rows = (
+        db.session.query(Review.verdict, func.count())
+        .filter(Review.state == SUBMITTED, Review.verdict.isnot(None))
+        .group_by(Review.verdict)
+    )
+    for code, count in verdict_rows:
+        verdicts[code] = verdicts.get(code, 0) + count
+    feedback = {kind: 0 for kind in catalog.FEEDBACK_KINDS}
+    feedback_rows = (
+        db.session.query(ModelFeedback.kind, func.count())
+        .join(Review, ModelFeedback.review_id == Review.id)
+        .filter(Review.state == SUBMITTED)
+        .group_by(ModelFeedback.kind)
+    )
+    for kind, count in feedback_rows:
+        feedback[kind] = feedback.get(kind, 0) + count
+
     return jsonify(
         by_status=by_status,
         doctors=doctors,
+        queues=_queues(),
+        verdicts=verdicts,
+        model_feedback=feedback,
         model_agreement={
             "compared": compared,
             "agreed": agreed,

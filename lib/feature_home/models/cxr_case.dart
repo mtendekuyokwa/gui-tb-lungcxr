@@ -3,6 +3,7 @@ import 'dart:ui';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/models/lesion.dart';
 import 'package:gui_lungcxr/feature_home/models/mark.dart';
+import 'package:gui_lungcxr/feature_home/models/mask_edit.dart';
 
 /// Where a case is in the admin → doctor → admin workflow.
 enum CaseStatus {
@@ -35,26 +36,39 @@ enum CaseStatus {
 class Prediction {
   const new({
     required this.state,
+    this.id,
     this.label,
     this.tbProbability,
     this.hasOverlay = false,
+    this.hasMask = false,
+    this.editedMask = false,
   });
 
   /// `queued`, `done` or `failed`.
   final String state;
 
+  /// Changes with every new reading, so image URLs can bust caches.
+  final int? id;
+
   /// `tb` or `normal` once [state] is `done`.
   final String? label;
   final double? tbProbability;
   final bool hasOverlay;
+  final bool hasMask;
+
+  /// Whether this reading used the doctor's corrected lung mask.
+  final bool editedMask;
 
   bool get done => state == 'done';
 
   static Prediction fromJson(Map<String, dynamic> json) => Prediction(
     state: json['state'] as String,
+    id: json['id'] as int?,
     label: json['label'] as String?,
     tbProbability: (json['tb_probability'] as num?)?.toDouble(),
     hasOverlay: json['has_overlay'] as bool? ?? false,
+    hasMask: json['has_mask'] as bool? ?? false,
+    editedMask: json['edited_mask'] as bool? ?? false,
   );
 }
 
@@ -65,6 +79,7 @@ class Review {
     this.verdict,
     this.note = '',
     this.marks = const [],
+    this.maskEdits = const [],
     this.diseases = const [],
     this.feedbackKind,
     this.feedbackNote = '',
@@ -78,6 +93,7 @@ class Review {
   final String? verdict;
   final String note;
   final List<Mark> marks;
+  final List<MaskEdit> maskEdits;
   final List<String> diseases;
   final String? feedbackKind;
   final String feedbackNote;
@@ -97,6 +113,10 @@ class Review {
       verdict: json['verdict'] as String?,
       note: json['note'] as String? ?? '',
       marks: [for (final mark in json['marks'] as List) markFromJson(mark)],
+      maskEdits: [
+        for (final edit in json['mask_edits'] as List? ?? const [])
+          maskEditFromJson(edit),
+      ],
       diseases: [
         for (final tag in json['disease_tags'] as List) tag['code'] as String,
       ],
@@ -115,13 +135,14 @@ Mark markFromJson(dynamic json) {
   final mark = Mark([
     for (final point in json['points'] as List)
       Offset((point[0] as num).toDouble(), (point[1] as num).toDouble()),
-  ]);
+  ], note: json['note'] as String? ?? '');
   mark.lesion = LesionType.values.asNameMap()[json['finding']];
   return mark;
 }
 
 Map<String, dynamic> markToJson(Mark mark) => {
   'finding': mark.lesion?.name,
+  'note': mark.note,
   'points': [
     for (final point in mark.points) [point.dx, point.dy],
   ],
@@ -134,6 +155,7 @@ class CxrCase {
     required this.status,
     required this.patientName,
     this.hospitalNumber,
+    this.hospitalName,
     this.prediction,
     this.doctorId,
     this.doctorName,
@@ -142,12 +164,16 @@ class CxrCase {
     this.verdict,
     this.modelWrong = false,
     this.needsTesting = false,
+    this.waitingSince,
   });
 
   final int id;
   final CaseStatus status;
   final String patientName;
   final String? hospitalNumber;
+
+  /// The hospital the X-ray came from, if recorded.
+  final String? hospitalName;
   final Prediction? prediction;
   final int? doctorId;
   final String? doctorName;
@@ -162,6 +188,10 @@ class CxrCase {
   final String? verdict;
   final bool modelWrong;
   final bool needsTesting;
+
+  /// When the case started waiting in a dashboard queue (submitted, due,
+  /// uploaded); only present on the admin dashboard's queues.
+  final DateTime? waitingSince;
 
   /// Shown wherever the mockup says "Client ID".
   String get displayId => hospitalNumber ?? '#$id';
@@ -178,11 +208,13 @@ class CxrCase {
     final doctor = json['assigned_to'] as Map<String, dynamic>?;
     final prediction = json['prediction'] as Map<String, dynamic>?;
     final review = json['review'] as Map<String, dynamic>?;
+    final hospital = json['hospital'] as Map<String, dynamic>?;
     return CxrCase(
       id: json['id'] as int,
       status: CaseStatus.fromCode(json['status'] as String),
       patientName: patient['name'] as String,
       hospitalNumber: patient['hospital_number'] as String?,
+      hospitalName: hospital?['name'] as String?,
       prediction: prediction == null ? null : Prediction.fromJson(prediction),
       doctorId: doctor?['id'] as int?,
       doctorName: doctor?['full_name'] as String?,
@@ -191,6 +223,10 @@ class CxrCase {
       verdict: json['verdict'] as String?,
       modelWrong: json['model_wrong'] as bool? ?? false,
       needsTesting: json['needs_testing'] as bool? ?? false,
+      waitingSince: switch (json['waiting_since']) {
+        final String at => DateTime.parse(at),
+        _ => null,
+      },
     );
   }
 }

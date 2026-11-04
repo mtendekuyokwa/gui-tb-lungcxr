@@ -41,22 +41,37 @@ class Pipeline:
 
     def __init__(self, models_dir):
         models_dir = pathlib.Path(models_dir)
-        missing = [f for f in (SEGMENTER_FILE, CLASSIFIER_FILE) if not (models_dir / f).is_file()]
+        missing = [f for f in (SEGMENTER_FILE, CLASSIFIER_FILE)
+                   if not (models_dir / f).is_file()]
         if missing:
-            raise FileNotFoundError(f"Model files missing from {models_dir}: {', '.join(missing)}")
+            raise FileNotFoundError(f"Model files missing from {
+                                    models_dir}: {', '.join(missing)}")
         self.segmenter = Segmenter(models_dir / SEGMENTER_FILE)
         self.classifier = Classifier(models_dir / CLASSIFIER_FILE)
 
-    def read(self, image_path):
+    def read(self, image_path, mask_path=None):
+        """Reads one X-ray. With ``mask_path`` (a doctor-corrected lung mask,
+        0/255 PNG) the segmenter is skipped and that mask is used instead."""
         gray = preprocess.load_gray(image_path)
-        mask = self.segmenter.mask(gray)
+        if mask_path is None:
+            mask = self.segmenter.mask(gray)
+        else:
+            with Image.open(mask_path) as given:
+                mask = np.asarray(
+                    given.convert("L").resize(gray.size, Image.NEAREST)) > 127
+        assert mask is not None
         if mask.mean() < MIN_LUNG_FRACTION:
             raise ModelError("No lungs found in the image.")
         masked, mask_small = preprocess.classifier_arrays(gray, mask)
         label, tb_probability, cam = self.classifier.predict(masked)
+        # The heatmap is blended over the mask at the overlay (SIZE) resolution.
+        mask_big = np.asarray(
+            Image.fromarray((mask_small * 255).astype(np.uint8)).resize(
+                (preprocess.SIZE, preprocess.SIZE), Image.BILINEAR),
+            dtype=np.float32) / 255.0
         return Reading(
             label=label,
             tb_probability=tb_probability,
             mask=Image.fromarray(mask.astype(np.uint8) * 255),
-            overlay=heatmap_overlay(cam, mask_small),
+            overlay=heatmap_overlay(cam, mask_big),
         )
