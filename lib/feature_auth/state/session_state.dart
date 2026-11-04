@@ -78,8 +78,7 @@ class SessionState extends ChangeNotifier {
     notifyListeners();
     final prefs = await SharedPreferences.getInstance();
     final last = prefs.getString(lastUserKey);
-    if (last != null &&
-        await _try(prefs, prefs.getString(tokenKeyFor(last)))) {
+    if (last != null && await _try(prefs, prefs.getString(tokenKeyFor(last)))) {
       _restoring = false;
       _notify();
       return;

@@ -17,13 +17,13 @@ void main() {
     expect(editor.tool, EditorTool.pan);
   });
 
-  test('adjustments clamp and reset', () {
+  test('adjustments clamp and reset one at a time', () {
     editor.setAdjustment(.contrast, 3);
     expect(editor.adjustment(.contrast), 1);
     expect(editor.hasAdjustments, isTrue);
 
     final resets = editor.resetCount;
-    editor.resetAdjustments();
+    editor.resetAdjustment(.contrast);
     expect(editor.hasAdjustments, isFalse);
     expect(editor.resetCount, resets + 1);
   });

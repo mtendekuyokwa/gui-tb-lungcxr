@@ -49,10 +49,8 @@ Future<void> _settle(WidgetTester tester) async {
   }
 }
 
-Finder _tab(String label) => find.descendant(
-  of: find.byType(NarrowTabs),
-  matching: find.text(label),
-);
+Finder _tab(String label) =>
+    find.descendant(of: find.byType(NarrowTabs), matching: find.text(label));
 
 void main() {
   setUp(() => SharedPreferences.setMockInitialValues({}));
@@ -119,12 +117,11 @@ void main() {
     expect(_tab(Strings.export), findsOneWidget);
 
     await tester.tap(_tab(Strings.casesTab));
-    await tester.pump();
+    await _settle(tester);
     // The queue leads; the opened case and intake are sub-tabs.
     expect(find.text(Strings.detailTab), findsWidgets);
     await tester.tap(find.text(Strings.intakeTab));
-    await tester.pump();
-    expect(find.text(Strings.uploadCase), findsOneWidget);
+    await _settle(tester);
     expect(find.text(Strings.assignTo), findsOneWidget);
 
     await tester.tap(_tab(Strings.dashboard));

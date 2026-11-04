@@ -5,6 +5,7 @@ import 'package:gui_lungcxr/api/api_client.dart';
 import 'package:gui_lungcxr/api/models.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_admin/api/admin_api.dart';
+import 'package:gui_lungcxr/feature_admin/utils/dashboard_text.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 
 export 'package:gui_lungcxr/feature_admin/api/admin_api.dart' show CaseFlag;
@@ -27,6 +28,7 @@ class AdminState extends ChangeNotifier {
 
   List<CxrCase> _cases = const [];
   List<AppUser> _allUsers = const [];
+  List<AppHospital> _hospitals = const [];
   CaseStatus? _statusFilter;
   int? _doctorFilter;
   CaseFlag? _flagFilter;
@@ -53,6 +55,9 @@ class AdminState extends ChangeNotifier {
 
   /// Every user including deactivated ones, for the doctors card.
   List<AppUser> get allUsers => _allUsers;
+
+  /// Every hospital, by name, for the hospitals card.
+  List<AppHospital> get hospitalList => _hospitals;
   CaseStatus? get statusFilter => _statusFilter;
   int? get doctorFilter => _doctorFilter;
   CaseFlag? get flagFilter => _flagFilter;
@@ -63,22 +68,9 @@ class AdminState extends ChangeNotifier {
   /// hold. Falls back to "0 open" when the stats panel failed to load.
   String workloadOf(AppUser doctor) {
     for (final w in _stats?.workload ?? const <DoctorWorkload>[]) {
-      if (w.fullName == doctor.fullName) {
-        return '${w.open} ${Strings.statsOpen} · '
-            '${w.submitted} ${Strings.statsSubmitted} · '
-            '${w.accepted} ${Strings.statsAccepted}';
-      }
+      if (w.doctorId == doctor.id) return workloadLine(w);
     }
     return '0 ${Strings.statsOpen}';
-  }
-
-  /// The id of the doctor with [fullName], for chart taps that drill into
-  /// a doctor's cases; null when no such active doctor exists.
-  int? doctorIdOf(String fullName) {
-    for (final user in _allUsers) {
-      if (user.isDoctor && user.fullName == fullName) return user.id;
-    }
-    return null;
   }
 
   /// True while an action is in flight; buttons disable themselves.
@@ -112,11 +104,18 @@ class AdminState extends ChangeNotifier {
       // Stats are a bonus panel; a failure must not blank the case list.
       stats = null;
     }
+    List<AppHospital>? hospitals;
+    try {
+      hospitals = await _api.hospitals();
+    } on ApiException {
+      hospitals = null; // same: the hospitals card keeps what it had
+    }
     // A newer reload started while awaiting: its results win.
     if (gen != _loadGen) return;
     _allUsers = users;
     _cases = cases;
     if (stats != null) _stats = stats;
+    if (hospitals != null) _hospitals = hospitals;
     // Prune only ticks the fresh list disproves: cases under another
     // status filter keep their ticks, so filtering never unticks work.
     _ticked.removeAll([
@@ -162,6 +161,37 @@ class AdminState extends ChangeNotifier {
     if (doctorId == _doctorFilter) return Future.value();
     _doctorFilter = doctorId;
     return load();
+  }
+
+  /// A dashboard drilldown: show exactly the cases one number counts, so
+  /// a filter left on from an earlier visit cannot shrink the list.
+  Future<void> showOnly({CaseStatus? status, int? doctorId, CaseFlag? flag}) {
+    if (status == _statusFilter &&
+        doctorId == _doctorFilter &&
+        flag == _flagFilter) {
+      return Future.value();
+    }
+    _statusFilter = status;
+    _doctorFilter = doctorId;
+    _flagFilter = flag;
+    return load();
+  }
+
+  /// From a dashboard queue row: list the cases [c] sits among and open
+  /// it, so its review and the accept / return decision are on screen.
+  Future<void> openFromQueue(CxrCase c) async {
+    await showOnly(
+      status: c.status == CaseStatus.submitted ? c.status : null,
+      doctorId: c.status == CaseStatus.submitted ? null : c.doctorId,
+    );
+    await openCase(c.id);
+  }
+
+  /// From the dashboard's not-assigned queue: list the unassigned cases
+  /// with [id] ticked, ready for the assign card.
+  Future<void> pickForAssignment(int id) async {
+    await showOnly(status: CaseStatus.unassigned);
+    if (!_ticked.contains(id)) toggleTicked(id);
   }
 
   Future<void> setFlagFilter(CaseFlag? flag) {
@@ -273,9 +303,28 @@ class AdminState extends ChangeNotifier {
   /// Runs the patient search behind the upload form's suggestions.
   Future<List<AppPatient>> patients(String query) => _api.patients(query);
 
+  /// Hospital lookup behind the upload form.
+  Future<List<AppHospital>> hospitals(String query) => _api.hospitals(query);
+
+  /// Adds a hospital from the upload form and keeps the list in step.
+  Future<AppHospital> createHospital(String name) async {
+    final hospital = await _api.createHospital(name);
+    if (!_hospitals.any((h) => h.id == hospital.id)) {
+      _hospitals = [..._hospitals, hospital]
+        ..sort((a, b) => a.name.toLowerCase().compareTo(b.name.toLowerCase()));
+      _notify();
+    }
+    return hospital;
+  }
+
+  /// Adds a hospital from the hospitals card.
+  Future<bool> addHospital(String name) =>
+      _guard(() async => createHospital(name.trim()));
+
   Future<bool> upload({
     required String patientName,
     required String hospitalNumber,
+    int? hospitalId,
     required Uint8List bytes,
     required String filename,
   }) => _guard(() async {
@@ -283,6 +332,7 @@ class AdminState extends ChangeNotifier {
     await _api.upload(
       patientName: patientName.trim(),
       hospitalNumber: number.isEmpty ? null : number,
+      hospitalId: hospitalId,
       bytes: bytes,
       filename: filename,
     );

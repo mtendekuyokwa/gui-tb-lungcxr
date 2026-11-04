@@ -436,6 +436,88 @@ def test_stats(client, admin, doc1, case_id):
     doc_one = next(d for d in stats["doctors"] if d["doctor"]["email"] == "doc1@test")
     assert (doc_one["open"], doc_one["submitted"], doc_one["accepted"]) == (0, 1, 0)
     assert stats["model_agreement"] == {"compared": 1, "agreed": 1, "rate": 1.0}
+    assert stats["verdicts"] == {
+        "tb_suspected": 1, "no_tb": 0, "other_disease": 0, "unreadable": 0}
+    assert set(stats["model_feedback"]) == {
+        "false_positive", "false_negative", "wrong_region", "cannot_judge"}
+    assert sum(stats["model_feedback"].values()) == 0
+
+
+def test_stats_count_model_feedback(client, admin, doc1, case_id):
+    set_prediction(case_id, "normal", 0.1)
+    client.put(f"{API}/cases/{case_id}/review", headers=doc1, json={"verdict": "tb_suspected"})
+    # A draft is not counted until it is submitted.
+    assert client.get(f"{API}/admin/stats", headers=admin).json["model_feedback"]["false_negative"] == 0
+    client.post(f"{API}/cases/{case_id}/review/submit", headers=doc1)
+    stats = client.get(f"{API}/admin/stats", headers=admin).json
+    assert stats["model_feedback"]["false_negative"] == 1
+    assert stats["model_agreement"] == {"compared": 1, "agreed": 0, "rate": 0.0}
+
+
+def test_stats_queues_what_waits_for_the_admin(client, admin, doc1, case_id):
+    waiting = upload(client, admin, name="Unassigned Patient")
+    late = upload(client, admin, name="Late Patient")
+    client.post(f"{API}/admin/cases/assign", headers=admin, json={
+        "case_ids": [late], "doctor_id": user_id(client, admin, "doc1@test"),
+        "due_at": "2020-01-01T00:00:00Z"})
+    set_prediction(case_id, "tb", 0.9)
+    client.put(f"{API}/cases/{case_id}/review", headers=doc1, json={"verdict": "tb_suspected"})
+    client.post(f"{API}/cases/{case_id}/review/submit", headers=doc1)
+
+    stats = client.get(f"{API}/admin/stats", headers=admin).json
+    queues = stats["queues"]
+    assert queues["sign_off"]["count"] == 1
+    assert queues["sign_off"]["cases"][0]["id"] == case_id
+    assert queues["sign_off"]["cases"][0]["waiting_since"] is not None
+    assert [c["id"] for c in queues["overdue"]["cases"]] == [late]
+    assert [c["id"] for c in queues["unassigned"]["cases"]] == [waiting]
+    doc_one = next(d for d in stats["doctors"] if d["doctor"]["email"] == "doc1@test")
+    assert doc_one["oldest_open_since"] is not None
+
+
+def test_hospitals_lookup_create_and_upload(client, admin, doc1):
+    created = client.post(f"{API}/hospitals", headers=doc1, json={"name": "  Kamuzu   Central "})
+    assert created.status_code == 201 and created.json["name"] == "Kamuzu Central"
+    again = client.post(f"{API}/hospitals", headers=admin, json={"name": "kamuzu central"})
+    assert again.status_code == 200 and again.json["id"] == created.json["id"]
+    assert client.post(f"{API}/hospitals", headers=admin, json={"name": " "}).status_code == 422
+    client.post(f"{API}/hospitals", headers=admin, json={"name": "Queen Elizabeth"})
+
+    found = client.get(f"{API}/hospitals", headers=doc1, query_string={"q": "queen"}).json
+    assert [h["name"] for h in found] == ["Queen Elizabeth"]
+    every = client.get(f"{API}/hospitals", headers=admin).json
+    assert [h["name"] for h in every] == ["Kamuzu Central", "Queen Elizabeth"]
+
+    hid = created.json["id"]
+    cid = upload(client, admin, hospital_id=str(hid))
+    assert client.get(f"{API}/admin/cases/{cid}", headers=admin).json["hospital"] == {
+        "id": hid, "name": "Kamuzu Central"}
+    data = {"image": (png_bytes(), "cxr.png"), "patient_name": "X", "hospital_id": "999"}
+    bad = client.post(f"{API}/cases", headers=doc1, data=data, content_type="multipart/form-data")
+    assert bad.status_code == 422
+
+
+def test_doctor_hides_a_case_from_their_list(client, admin, doc1, case_id):
+    def listed():
+        return [c["id"] for c in client.get(f"{API}/cases", headers=doc1).json]
+
+    assert client.post(f"{API}/cases/{case_id}/hide", headers=doc1).status_code == 204
+    assert case_id not in listed()
+    # The admin still sees it, untouched.
+    assert client.get(f"{API}/admin/cases/{case_id}", headers=admin).json["status"] == "assigned"
+    assert client.post(f"{API}/cases/{case_id}/unhide", headers=doc1).status_code == 200
+    assert case_id in listed()
+
+    # Coming back from the admin shows it again.
+    client.post(f"{API}/cases/{case_id}/hide", headers=doc1)
+    client.put(f"{API}/cases/{case_id}/review", headers=doc1, json={"verdict": "no_tb"})
+    client.post(f"{API}/cases/{case_id}/review/submit", headers=doc1)
+    client.post(f"{API}/admin/cases/{case_id}/return", headers=admin, json={"note": "Recheck"})
+    assert case_id in listed()
+
+
+def test_cannot_hide_someone_elses_case(client, doc2, case_id):
+    assert client.post(f"{API}/cases/{case_id}/hide", headers=doc2).status_code == 404
 
 
 def test_expired_token_is_rejected(app, client):

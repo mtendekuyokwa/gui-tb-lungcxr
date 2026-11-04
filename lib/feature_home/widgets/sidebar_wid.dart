@@ -7,7 +7,7 @@ import 'package:gui_lungcxr/feature_home/state/image_editor_state.dart';
 import 'package:gui_lungcxr/widgets/app_brand.dart';
 import 'package:provider/provider.dart';
 
-/// Left rail: the canvas tools, the image adjustments and their reset.
+/// Left rail: the canvas tools and the image adjustments.
 class SidebarWid extends StatelessWidget {
   const new({super.key});
 
@@ -33,17 +33,6 @@ class SidebarWid extends StatelessWidget {
       header: const Padding(
         padding: .symmetric(horizontal: AppSizes.gap16),
         child: Align(alignment: .centerLeft, child: AppBrand()),
-      ),
-      footer: Padding(
-        padding: const .symmetric(horizontal: AppSizes.gap16),
-        child: FButton(
-          variant: .outline,
-          onPress: editor.hasAdjustments ? editor.resetAdjustments : null,
-          prefix: const Icon(FLucideIcons.rotateCcw),
-          child: const Flexible(
-            child: Text(Strings.resetAdjustments, overflow: .ellipsis),
-          ),
-        ),
       ),
       children: [
         FSidebarGroup(

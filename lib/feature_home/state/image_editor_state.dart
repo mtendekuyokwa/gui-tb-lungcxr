@@ -129,12 +129,6 @@ class ImageEditorState extends ChangeNotifier {
     notifyListeners();
   }
 
-  void resetAdjustments() {
-    _adjustments.updateAll((_, _) => 0);
-    _resetCount++;
-    notifyListeners();
-  }
-
   /// Replaces all marks, e.g. with the ones saved on the backend.
   void replaceMarks(Iterable<Mark> marks) {
     _marks

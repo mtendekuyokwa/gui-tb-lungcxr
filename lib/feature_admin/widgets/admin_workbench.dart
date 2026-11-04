@@ -4,13 +4,13 @@ import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_admin/state/admin_state.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/case_detail_card.dart';
-import 'package:gui_lungcxr/feature_admin/widgets/upload_card.dart';
 import 'package:gui_lungcxr/feature_admin/widgets/assign_card.dart';
 import 'package:provider/provider.dart';
 
-/// The rail beside the case list on the Cases page: the opened case and
-/// intake (add a case, then hand ticked ones to a doctor). Team and export
-/// live on their own pages, reached from the sidebar.
+/// The rail beside the case list on the Cases page: the opened case, and
+/// intake (hand ticked cases to a doctor; new cases are filed from the
+/// create pop-up). Team and export live on their own pages, reached from
+/// the sidebar.
 class AdminWorkbench extends StatelessWidget {
   const AdminWorkbench({super.key});
 
@@ -26,7 +26,7 @@ class AdminWorkbench extends StatelessWidget {
         ),
         FTabEntry(
           label: Text(Strings.intakeTab),
-          child: _page([const UploadCard(), const AssignCard()]),
+          child: _page(const [AssignCard()]),
         ),
       ],
     );

@@ -4,6 +4,7 @@ import 'package:gui_lungcxr/constants/app_sizes.dart';
 import 'package:gui_lungcxr/constants/strings.dart';
 import 'package:gui_lungcxr/feature_home/state/review_state.dart';
 import 'package:gui_lungcxr/feature_home/utils/review_text.dart';
+import 'package:gui_lungcxr/widgets/busy_icon.dart';
 import 'package:provider/provider.dart';
 
 /// Autosave status and the submit button under the review form.
@@ -36,9 +37,13 @@ class ReviewSubmitBar extends StatelessWidget {
           FButton(
             size: .sm,
             mainAxisSize: .min,
-            onPress: review.canSubmit && review.saveStatus != .saving
+            onPress:
+                review.canSubmit &&
+                    review.saveStatus != .saving &&
+                    !review.submitting
                 ? onSubmit
                 : null,
+            prefix: BusyIcon(busy: review.submitting, icon: FLucideIcons.send),
             child: const Text(Strings.submitReview),
           ),
         ],

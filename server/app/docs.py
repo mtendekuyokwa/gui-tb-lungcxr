@@ -40,7 +40,8 @@ prediction_sub_model = api.model("PredictionSub", {
     "label": fields.String(description="Predicted label"),
     "tb_probability": fields.Float(description="TB probability score"),
     "has_overlay": fields.Boolean(description="Whether overlay exists"),
-    "has_mask": fields.Boolean(description="Whether lung mask exists")
+    "has_mask": fields.Boolean(description="Whether lung mask exists"),
+    "edited_mask": fields.Boolean(description="Whether this reading used a doctor-corrected lung mask"),
 })
 
 doctor_sub_model = api.model("DoctorSub", {
@@ -49,6 +50,15 @@ doctor_sub_model = api.model("DoctorSub", {
     "full_name": fields.String(description="Doctor full name"),
     "role": fields.String(description="User role"),
     "active": fields.Boolean(description="Active status"),
+})
+
+hospital_sub_model = api.model("HospitalSub", {
+    "id": fields.Integer(description="Hospital ID"),
+    "name": fields.String(description="Hospital name"),
+})
+
+hospital_input_model = api.model("HospitalInput", {
+    "name": fields.String(required=True, description="Hospital name"),
 })
 
 patient_sub_model = api.model("PatientSub", {
@@ -126,7 +136,8 @@ doctor_workload_model = api.model("DoctorWorkload", {
     "doctor": fields.Nested(doctor_sub_model, description="Doctor profile"),
     "open": fields.Integer(description="Open cases count"),
     "submitted": fields.Integer(description="Submitted cases count"),
-    "accepted": fields.Integer(description="Accepted cases count")
+    "accepted": fields.Integer(description="Accepted cases count"),
+    "oldest_open_since": fields.String(description="Assignment time of the doctor's longest-waiting open case")
 })
 
 model_agreement_model = api.model("ModelAgreement", {
@@ -197,6 +208,9 @@ system_stats_model = api.model("SystemStats", {
     "by_status": fields.Raw(description="Case counts by status"),
     "doctors": fields.List(fields.Nested(doctor_workload_model)),
     "model_agreement": fields.Nested(model_agreement_model),
+    "queues": fields.Raw(description="sign_off / overdue / unassigned: {count, cases (oldest 5, each with waiting_since)}"),
+    "verdicts": fields.Raw(description="Submitted reviews by verdict code"),
+    "model_feedback": fields.Raw(description="Submitted model feedback by kind"),
 })
 
 # Multipart parser for the admin case-upload endpoint. Documented as form
@@ -206,6 +220,8 @@ upload_parser.add_argument("image", location="files", type=FileStorage,
                            required=True, help="X-ray image file (PNG or JPEG)")
 upload_parser.add_argument(
     "hospital_number", location="form", help="Patient hospital number, optional")
+upload_parser.add_argument(
+    "hospital_id", location="form", help="ID of an existing hospital (see /hospitals), optional")
 upload_parser.add_argument("patient_name", location="form",
                            required=True, help="Patient name (required for a new patient)")
 upload_parser.add_argument("sex", location="form",
@@ -281,6 +297,7 @@ case_summary_model = api.model("CaseSummary", {
     "id": fields.Integer(description="Case ID"),
     "status": fields.String(description="Case status"),
     "patient": fields.Nested(patient_sub_model, description="Patient information"),
+    "hospital": fields.Nested(hospital_sub_model, allow_null=True, description="Hospital the X-ray came from, nullable"),
     "assigned_to": fields.Nested(doctor_sub_model, allow_null=True, description="Assigned doctor, null while unassigned"),
     "assigned_at": fields.String(description="ISO assignment timestamp, nullable"),
     "due_at": fields.String(description="ISO due timestamp, nullable"),
@@ -293,6 +310,7 @@ case_detail_model = api.model("CaseDetail", {
     "id": fields.Integer(description="Case ID"),
     "status": fields.String(description="Case status"),
     "patient": fields.Nested(patient_sub_model, description="Patient information"),
+    "hospital": fields.Nested(hospital_sub_model, allow_null=True, description="Hospital the X-ray came from, nullable"),
     "assigned_to": fields.Nested(doctor_sub_model, allow_null=True, description="Assigned doctor"),
     "assigned_at": fields.String(description="ISO assignment timestamp, nullable"),
     "due_at": fields.String(description="ISO due timestamp, nullable"),
@@ -307,6 +325,7 @@ admin_case_detail_model = api.model("AdminCaseDetail", {
     "id": fields.Integer(description="Case ID"),
     "status": fields.String(description="Case status"),
     "patient": fields.Nested(patient_sub_model, description="Patient information"),
+    "hospital": fields.Nested(hospital_sub_model, allow_null=True, description="Hospital the X-ray came from, nullable"),
     "assigned_to": fields.Nested(doctor_sub_model, allow_null=True, description="Assigned doctor"),
     "assigned_at": fields.String(description="ISO assignment timestamp, nullable"),
     "due_at": fields.String(description="ISO due timestamp, nullable"),
@@ -363,6 +382,14 @@ class Catalog(Resource):
         """Get application catalog"""
 
 
+@api.route("/health")
+class Health(Resource):
+    @api.doc(description="Liveness check for the hosting platform; needs no token.", security=[])
+    @api.response(200, "Service is up")
+    def get(self):
+        """Health check"""
+
+
 @api.route("/patients")
 class PatientsSearch(Resource):
     @api.doc(description="Searches patients by name or hospital number so a returning patient's record can be reused on a new case.", params={"q": "Name or hospital number fragment, at least 2 characters"})
@@ -371,6 +398,25 @@ class PatientsSearch(Resource):
     @api.param("q", "Name or hospital number fragment")
     def get(self):
         """Search patients (Doctor and Admin)"""
+
+
+@api.route("/hospitals")
+class Hospitals(Resource):
+    @api.doc(description="Hospital lookup for the upload form. With q, up to 8 name matches; without it, every hospital by name.")
+    @api.param("q", "Name fragment, optional")
+    @api.response(200, "Hospitals", [hospital_sub_model])
+    @api.response(401, "Not authenticated", error_model)
+    def get(self):
+        """Search or list hospitals (Doctor and Admin)"""
+
+    @api.doc(description="Adds a hospital. An existing name (ignoring case) returns that hospital with 200 instead of duplicating it.")
+    @api.expect(hospital_input_model)
+    @api.response(201, "Hospital created", hospital_sub_model)
+    @api.response(200, "Hospital already existed", hospital_sub_model)
+    @api.response(401, "Not authenticated", error_model)
+    @api.response(422, "Missing or too long name", error_model)
+    def post(self):
+        """Create hospital (Doctor and Admin)"""
 
 
 @api.route("/cases")
@@ -401,6 +447,38 @@ class CaseDetail(Resource):
     @api.param("case_id", "Case unique identifier")
     def get(self, case_id):
         """Get case detail (Doctor)"""
+
+
+@api.route("/cases/<int:case_id>/hide")
+class CaseHide(Resource):
+    @api.doc(description="Takes the case off the signed-in doctor's list. Nothing is deleted or reassigned; assigning or returning the case shows it again.")
+    @api.response(204, "Hidden")
+    @api.response(404, "Case not found", error_model)
+    @api.param("case_id", "Case unique identifier")
+    def post(self, case_id):
+        """Hide case from my list (Doctor)"""
+
+
+@api.route("/cases/<int:case_id>/unhide")
+class CaseUnhide(Resource):
+    @api.doc(description="Puts a hidden case back on the doctor's list.")
+    @api.response(200, "Case detail", case_detail_model)
+    @api.response(404, "Case not found", error_model)
+    @api.param("case_id", "Case unique identifier")
+    def post(self, case_id):
+        """Unhide case (Doctor)"""
+
+
+@api.route("/cases/<int:case_id>/reevaluate")
+class CaseReevaluate(Resource):
+    @api.doc(description="Bakes the saved draft's mask_edits into a new lung mask and queues a new prediction that classifies with it (run inline when the models are present). The draft's mask_edits are cleared.")
+    @api.response(200, "Case detail with the new prediction", case_detail_model)
+    @api.response(404, "Case not found", error_model)
+    @api.response(409, "Case not open, no mask yet, or model still reading", error_model)
+    @api.response(422, "No mask corrections saved", error_model)
+    @api.param("case_id", "Case unique identifier")
+    def post(self, case_id):
+        """Re-evaluate with corrected mask (Doctor)"""
 
 
 @api.route("/cases/<int:case_id>/image")

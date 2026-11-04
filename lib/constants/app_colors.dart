@@ -25,14 +25,4 @@ class AppColors {
   /// Translucent wash for the lung segmentation mask. Emerald sits apart
   /// from the mark colours and the XAI heatmap.
   static const Color maskTint = Color(0xFF34D399);
-
-  /// Admin dashboard tile accents. The theme has no warning / success
-  /// tokens, so the dashboard picks fixed hues that read on both modes.
-  static const Color statWarning = Color(0xFFD97706);
-  static const Color statDone = Color(0xFF059669);
-
-  /// Chart-only hues completing the six status colours. The theme's own
-  /// primary / destructive cover unassigned and returned.
-  static const Color statHeld = Color(0xFF94A3B8); // assigned
-  static const Color statReviewing = Color(0xFF7C3AED); // in review
 }

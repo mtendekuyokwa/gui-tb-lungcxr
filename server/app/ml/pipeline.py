@@ -49,9 +49,16 @@ class Pipeline:
         self.segmenter = Segmenter(models_dir / SEGMENTER_FILE)
         self.classifier = Classifier(models_dir / CLASSIFIER_FILE)
 
-    def read(self, image_path):
+    def read(self, image_path, mask_path=None):
+        """Reads one X-ray. With ``mask_path`` (a doctor-corrected lung mask,
+        0/255 PNG) the segmenter is skipped and that mask is used instead."""
         gray = preprocess.load_gray(image_path)
-        mask = self.segmenter.mask(gray)
+        if mask_path is None:
+            mask = self.segmenter.mask(gray)
+        else:
+            with Image.open(mask_path) as given:
+                mask = np.asarray(
+                    given.convert("L").resize(gray.size, Image.NEAREST)) > 127
         assert mask is not None
         if mask.mean() < MIN_LUNG_FRACTION:
             raise ModelError("No lungs found in the image.")

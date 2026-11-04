@@ -42,20 +42,16 @@ class AdminHeader extends StatelessWidget {
                 // Bounded so a long page name ellipsizes instead of
                 // pushing the buttons out.
                 Expanded(
-                  child:
-                      (wide)
-                          ? Text(
-                            title,
-                            maxLines: 1,
-                            overflow: .ellipsis,
-                            style: theme.typography.body.md.copyWith(
-                              fontWeight: .w600,
-                            ),
-                          )
-                          : const Align(
-                            alignment: .centerLeft,
-                            child: AppBrand(),
+                  child: (wide)
+                      ? Text(
+                          title,
+                          maxLines: 1,
+                          overflow: .ellipsis,
+                          style: theme.typography.body.md.copyWith(
+                            fontWeight: .w600,
                           ),
+                        )
+                      : const Align(alignment: .centerLeft, child: AppBrand()),
                 ),
                 if (wide)
                   Flexible(

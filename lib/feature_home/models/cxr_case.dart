@@ -36,14 +36,19 @@ enum CaseStatus {
 class Prediction {
   const new({
     required this.state,
+    this.id,
     this.label,
     this.tbProbability,
     this.hasOverlay = false,
     this.hasMask = false,
+    this.editedMask = false,
   });
 
   /// `queued`, `done` or `failed`.
   final String state;
+
+  /// Changes with every new reading, so image URLs can bust caches.
+  final int? id;
 
   /// `tb` or `normal` once [state] is `done`.
   final String? label;
@@ -51,14 +56,19 @@ class Prediction {
   final bool hasOverlay;
   final bool hasMask;
 
+  /// Whether this reading used the doctor's corrected lung mask.
+  final bool editedMask;
+
   bool get done => state == 'done';
 
   static Prediction fromJson(Map<String, dynamic> json) => Prediction(
     state: json['state'] as String,
+    id: json['id'] as int?,
     label: json['label'] as String?,
     tbProbability: (json['tb_probability'] as num?)?.toDouble(),
     hasOverlay: json['has_overlay'] as bool? ?? false,
     hasMask: json['has_mask'] as bool? ?? false,
+    editedMask: json['edited_mask'] as bool? ?? false,
   );
 }
 
@@ -145,6 +155,7 @@ class CxrCase {
     required this.status,
     required this.patientName,
     this.hospitalNumber,
+    this.hospitalName,
     this.prediction,
     this.doctorId,
     this.doctorName,
@@ -153,12 +164,16 @@ class CxrCase {
     this.verdict,
     this.modelWrong = false,
     this.needsTesting = false,
+    this.waitingSince,
   });
 
   final int id;
   final CaseStatus status;
   final String patientName;
   final String? hospitalNumber;
+
+  /// The hospital the X-ray came from, if recorded.
+  final String? hospitalName;
   final Prediction? prediction;
   final int? doctorId;
   final String? doctorName;
@@ -173,6 +188,10 @@ class CxrCase {
   final String? verdict;
   final bool modelWrong;
   final bool needsTesting;
+
+  /// When the case started waiting in a dashboard queue (submitted, due,
+  /// uploaded); only present on the admin dashboard's queues.
+  final DateTime? waitingSince;
 
   /// Shown wherever the mockup says "Client ID".
   String get displayId => hospitalNumber ?? '#$id';
@@ -189,11 +208,13 @@ class CxrCase {
     final doctor = json['assigned_to'] as Map<String, dynamic>?;
     final prediction = json['prediction'] as Map<String, dynamic>?;
     final review = json['review'] as Map<String, dynamic>?;
+    final hospital = json['hospital'] as Map<String, dynamic>?;
     return CxrCase(
       id: json['id'] as int,
       status: CaseStatus.fromCode(json['status'] as String),
       patientName: patient['name'] as String,
       hospitalNumber: patient['hospital_number'] as String?,
+      hospitalName: hospital?['name'] as String?,
       prediction: prediction == null ? null : Prediction.fromJson(prediction),
       doctorId: doctor?['id'] as int?,
       doctorName: doctor?['full_name'] as String?,
@@ -202,6 +223,10 @@ class CxrCase {
       verdict: json['verdict'] as String?,
       modelWrong: json['model_wrong'] as bool? ?? false,
       needsTesting: json['needs_testing'] as bool? ?? false,
+      waitingSince: switch (json['waiting_since']) {
+        final String at => DateTime.parse(at),
+        _ => null,
+      },
     );
   }
 }

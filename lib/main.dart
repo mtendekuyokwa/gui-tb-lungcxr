@@ -33,9 +33,10 @@ class Application extends StatelessWidget {
     // There is a known issue with implicitly animated widgets where their transition occurs AFTER the theme's.
     // See https://github.com/duobaseio/forui/issues/670.
     theme: lightTheme.toApproximateMaterialTheme(),
-    darkTheme: darkTheme.toApproximateMaterialTheme(),
+    themeMode: ThemeMode.light,
     builder: (context, child) => FTheme(
-      data: Theme.brightnessOf(context) == .light ? lightTheme : darkTheme,
+      // Light mode only, whatever the platform brightness.
+      data: lightTheme,
       child: FToaster(child: FTooltipGroup(child: child!)),
     ),
     home: const FScaffold(child: AppGate()),

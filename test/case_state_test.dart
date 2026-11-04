@@ -104,13 +104,11 @@ void main() {
     expect(cases.imageUrl(1), 'http://test/cases/1/image');
   });
 
-  test('each case keeps its own editor, review and chat', () {
+  test('each case keeps its own editor and review', () {
     expect(cases.editorFor(1), same(cases.editorFor(1)));
     expect(cases.reviewFor(1), same(cases.reviewFor(1)));
     cases.editorFor(1).setAdjustment(.brightness, 0.4);
-    cases.chatFor(1).send('hello');
     expect(cases.editorFor(2).hasAdjustments, isFalse);
-    expect(cases.chatFor(2).messages, isEmpty);
   });
 
   test('opening a case updates its status in the list', () async {
@@ -339,5 +337,60 @@ void main() {
     await Future<void>.delayed(const Duration(milliseconds: 30));
     expect(loads(), settled, reason: 'no more polls once the reading is done');
     expect(polling.selected?.prediction?.state, 'done');
+  });
+
+  test('the upload sends the chosen hospital and selects the case', () async {
+    final hospital = await cases.createHospital('Queen Elizabeth');
+    expect((await cases.hospitals('queen')).single.id, hospital.id);
+    await cases.upload(
+      patientName: 'New Upload',
+      hospitalNumber: '',
+      hospitalId: hospital.id,
+      bytes: Uint8List.fromList([1, 2, 3]),
+      filename: 'cxr.png',
+    );
+    expect(backend.lastUploadBody, contains('name="hospital_id"'));
+    expect(backend.lastUploadBody, contains('${hospital.id}'));
+    expect(cases.selected?.id, 3);
+  });
+
+  test(
+    'hiding a case drops it from the list and undo brings it back',
+    () async {
+      expect(cases.selected?.id, 1);
+      expect(await cases.hide(1), isTrue);
+      expect(backend.log, contains('POST /cases/1/hide'));
+      expect(cases.cases.map((c) => c.id), [2]);
+      expect(cases.selected?.id, 2, reason: 'the next case opens');
+      expect(cases.hiding, isNull);
+
+      await cases.unhide(1);
+      expect(cases.cases.map((c) => c.id), containsAll([1, 2]));
+      expect(cases.selected?.id, 1);
+    },
+  );
+
+  test('re-evaluating sends the saved mask corrections to the model', () async {
+    final review = await openFirst();
+    final editor = cases.editorFor(1);
+    expect(review.canReevaluate, isFalse, reason: 'nothing corrected yet');
+    editor
+      ..startMaskStroke(const Offset(0.3, 0.3))
+      ..endMaskStroke();
+    expect(review.canReevaluate, isTrue);
+
+    expect(await review.reevaluate(), isTrue);
+    expect(backend.saved.last['mask_edits'], hasLength(1));
+    expect(backend.log, contains('POST /cases/1/reevaluate'));
+    // The corrections are now part of the new mask.
+    expect(editor.maskEdits, isEmpty);
+    expect(review.reevaluating, isFalse);
+    final prediction = cases.selected!.prediction!;
+    expect(prediction.state, 'queued');
+    expect(prediction.editedMask, isTrue);
+    // A new reading means new image URLs, so no stale overlay is shown.
+    expect(cases.maskUrl(cases.selected!), endsWith('?v=101'));
+    await _settle();
+    expect(review.saveStatus, isNot(SaveStatus.unsaved));
   });
 }

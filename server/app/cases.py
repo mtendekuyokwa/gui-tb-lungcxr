@@ -17,12 +17,15 @@ from .models import (
     ROLE_ADMIN,
     ROLE_DOCTOR,
     SUBMITTED,
+    QUEUED,
     Case,
     DiseaseTag,
+    Hospital,
     Mark,
     MaskEdit,
     ModelFeedback,
     Patient,
+    Prediction,
     Review,
     TestRequest,
     now,
@@ -110,10 +113,54 @@ def search_patients():
     return jsonify([p.to_dict() for p in matches])
 
 
+HOSPITAL_SUGGESTIONS = 8
+HOSPITAL_LIST_LIMIT = 500
+
+
+@bp.get("/hospitals")
+@login_required()
+def list_hospitals():
+    """Hospital lookup for the upload form. With ``q`` the best few name
+    matches; without it every hospital (the admin's list), by name."""
+    query = (request.args.get("q") or "").strip()
+    hospitals = Hospital.query.order_by(Hospital.name)
+    if query:
+        hospitals = hospitals.filter(Hospital.name.ilike(f"%{query}%")).limit(
+            HOSPITAL_SUGGESTIONS)
+    else:
+        hospitals = hospitals.limit(HOSPITAL_LIST_LIMIT)
+    return jsonify([h.to_dict() for h in hospitals])
+
+
+@bp.post("/hospitals")
+@login_required()
+def create_hospital():
+    """Adds a hospital, from the admin's list or straight from the upload
+    form. A name that already exists (ignoring case) returns that hospital,
+    so "create" from a stale suggestion list never duplicates one."""
+    name = json_body().get("name")
+    if not isinstance(name, str) or not name.strip():
+        raise ApiError(422, "A hospital 'name' is required.")
+    name = " ".join(name.split())
+    if len(name) > 255:
+        raise ApiError(422, "'name' must be at most 255 characters.")
+    existing = Hospital.query.filter(db.func.lower(Hospital.name) == name.lower()).first()
+    if existing is not None:
+        return jsonify(existing.to_dict()), 200
+    hospital = Hospital(name=name)
+    db.session.add(hospital)
+    db.session.commit()
+    return jsonify(hospital.to_dict()), 201
+
+
 @bp.get("/cases")
 @login_required(ROLE_DOCTOR)
 def list_cases():
-    query = Case.query.filter_by(assigned_to=g.user.id)
+    # Cases the doctor hid stay out of their list (the admin still sees them).
+    query = Case.query.filter(
+        Case.assigned_to == g.user.id,
+        db.or_(Case.hidden_by.is_(None), Case.hidden_by != g.user.id),
+    )
     status = request.args.get("status")
     if status:
         if status not in CASE_STATUSES:
@@ -131,6 +178,70 @@ def get_case(case_id):
         audit(case, "opened")
         db.session.commit()
     return jsonify(_detail(case))
+
+
+@bp.post("/cases/<int:case_id>/hide")
+@login_required(ROLE_DOCTOR)
+def hide_case(case_id):
+    """Takes the case off the doctor's own list. Nothing is deleted or
+    reassigned; the admin sees it as before and ``/unhide`` brings it back."""
+    case = _my_case(case_id)
+    case.hidden_by = g.user.id
+    audit(case, "hidden")
+    db.session.commit()
+    return "", 204
+
+
+@bp.post("/cases/<int:case_id>/unhide")
+@login_required(ROLE_DOCTOR)
+def unhide_case(case_id):
+    case = _my_case(case_id)
+    if case.hidden_by is not None:
+        case.hidden_by = None
+        audit(case, "unhidden")
+        db.session.commit()
+    return jsonify(_detail(case))
+
+
+@bp.post("/cases/<int:case_id>/reevaluate")
+@login_required(ROLE_DOCTOR)
+def reevaluate_case(case_id):
+    """Runs the classifier again on the doctor's corrected lung mask.
+
+    The saved draft's mask edits are baked into a new mask image, which a new
+    prediction uses instead of the segmenter's; the edits are then cleared
+    from the draft because the new mask already contains them. Earlier
+    predictions stay as history.
+    """
+    case = _my_case(case_id)
+    if case.status not in OPEN_STATUSES:
+        raise ApiError(409, "This case is not open for editing.")
+    current = case.prediction
+    if current is None or not current.mask_path:
+        raise ApiError(409, "There is no lung mask to correct yet.")
+    if current.state == QUEUED:
+        raise ApiError(409, "The model is still reading this case.")
+    review = case.review_by(g.user.id)
+    if review is None or not review.mask_edits:
+        raise ApiError(422, "Correct the lung mask before re-evaluating.")
+
+    from .remask import bake
+
+    prediction = Prediction(state=QUEUED)
+    case.predictions.append(prediction)
+    db.session.flush()  # assigns prediction.id, which names the mask file
+    prediction.input_mask_path = bake(
+        current.mask_path, review.mask_edits, f"masks/{case.id}-{prediction.id}.png")
+    review.mask_edits = []
+    review.updated_at = now()
+    if case.status != IN_REVIEW:
+        case.status = IN_REVIEW
+    audit(case, "reevaluated", "with a corrected lung mask")
+    db.session.commit()
+    from .worker import run_model_inline
+
+    run_model_inline(case.id)
+    return jsonify(_detail(db.session.get(Case, case.id)))
 
 
 @bp.get("/cases/<int:case_id>/image")

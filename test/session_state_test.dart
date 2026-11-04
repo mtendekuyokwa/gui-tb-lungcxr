@@ -4,10 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 
 import 'support/fake_backend.dart';
 
-const doctorTokenKey =
-    '${SessionState.tokenPrefix}doc@test';
-const adminTokenKey =
-    '${SessionState.tokenPrefix}admin@test';
+const doctorTokenKey = '${SessionState.tokenPrefix}doc@test';
+const adminTokenKey = '${SessionState.tokenPrefix}admin@test';
 
 Future<SharedPreferences> prefs() => SharedPreferences.getInstance();
 
@@ -25,10 +23,7 @@ void main() {
     await session.login('doc@test', 'secret');
     expect(session.user?.isDoctor, isTrue);
     expect((await prefs()).getString(doctorTokenKey), 'token-1');
-    expect(
-      (await prefs()).getString(SessionState.lastUserKey),
-      'doc@test',
-    );
+    expect((await prefs()).getString(SessionState.lastUserKey), 'doc@test');
   });
 
   test('a wrong password persists nothing', () async {
@@ -51,10 +46,7 @@ void main() {
     expect(session.restoring, isFalse);
     expect(session.user?.fullName, 'Doc One');
     expect(session.catalog.verdicts, hasLength(3));
-    expect(
-      backend.log,
-      containsAll(['GET /auth/me', 'GET /catalog']),
-    );
+    expect(backend.log, containsAll(['GET /auth/me', 'GET /catalog']));
   });
 
   test('restore with a rejected token stays signed out', () async {
@@ -138,15 +130,15 @@ void main() {
     expect(after.getString(SessionState.lastUserKey), 'doc@test');
   });
 
-  test('restore without a last pointer tries other signed-in accounts',
-      () async {
-    SharedPreferences.setMockInitialValues({
-      doctorTokenKey: 'token-1',
-    });
-    final session = SessionState(api: backend.api);
-    addTearDown(session.dispose);
-    await session.restore();
-    expect(session.user, isNull);
-    expect(await prefs().then((p) => p.getString(doctorTokenKey)), 'token-1');
-  });
+  test(
+    'restore without a last pointer tries other signed-in accounts',
+    () async {
+      SharedPreferences.setMockInitialValues({doctorTokenKey: 'token-1'});
+      final session = SessionState(api: backend.api);
+      addTearDown(session.dispose);
+      await session.restore();
+      expect(session.user, isNull);
+      expect(await prefs().then((p) => p.getString(doctorTokenKey)), 'token-1');
+    },
+  );
 }

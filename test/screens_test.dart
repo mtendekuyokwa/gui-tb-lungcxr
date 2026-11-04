@@ -8,7 +8,7 @@ import 'package:gui_lungcxr/feature_admin/widgets/case_list.dart';
 import 'package:gui_lungcxr/feature_auth/state/session_state.dart';
 import 'package:gui_lungcxr/feature_home/models/cxr_case.dart';
 import 'package:gui_lungcxr/feature_home/widgets/client_board.dart';
-import 'package:gui_lungcxr/feature_home/widgets/segment_panel.dart';
+import 'package:gui_lungcxr/feature_home/widgets/segment_bar.dart';
 import 'package:gui_lungcxr/main.dart';
 import 'package:gui_lungcxr/theme/theme.dart';
 import 'package:provider/provider.dart';
@@ -85,7 +85,7 @@ void main() {
     },
   );
 
-  testWidgets('segment tool opens the mask correction panel', (tester) async {
+  testWidgets('segment tool opens the mask correction bar', (tester) async {
     final backend = FakeBackend();
     final session = SessionState(api: backend.api);
     addTearDown(session.dispose);
@@ -95,7 +95,7 @@ void main() {
 
     await tester.tap(find.byIcon(FLucideIcons.spline));
     await tester.pump();
-    final panel = find.byType(SegmentPanel);
+    final panel = find.byType(SegmentBar);
     expect(panel, findsOneWidget);
     expect(
       find.descendant(of: panel, matching: find.byIcon(FLucideIcons.brush)),
@@ -105,7 +105,12 @@ void main() {
       find.descendant(of: panel, matching: find.byIcon(FLucideIcons.eraser)),
       findsOneWidget,
     );
-    expect(find.text(Strings.resetSegmentEdits), findsOneWidget);
+    expect(
+      find.descendant(of: panel, matching: find.byIcon(FLucideIcons.rotateCcw)),
+      findsOneWidget,
+    );
+    // Nothing corrected yet, so there is nothing to re-evaluate.
+    expect(find.text(Strings.reevaluate), findsOneWidget);
 
     // Each subtool carries its own default width.
     await tester.tap(
@@ -123,9 +128,11 @@ void main() {
     );
 
     // The panel closes back to pan without hiding the overlay.
-    await tester.tap(find.byIcon(FLucideIcons.x));
+    await tester.tap(
+      find.descendant(of: panel, matching: find.byIcon(FLucideIcons.x)),
+    );
     await tester.pump();
-    expect(find.byType(SegmentPanel), findsNothing);
+    expect(find.byIcon(FLucideIcons.brush), findsNothing);
     expect(
       find.byWidgetPredicate(
         (w) =>
@@ -180,14 +187,13 @@ void main() {
     await _pumpApp(tester, session);
     await _settle(tester);
 
-    // The doctor's own upload starts collapsed behind a button.
-    await tester.tap(find.text(Strings.uploadCase));
+    // The create FAB floats over the workspace; its pop-up holds the form.
+    await tester.tap(find.byIcon(FLucideIcons.plus));
     await _settle(tester);
-
 
     // Typing suggests existing patients; picking one fills both fields.
     await tester.enterText(
-      find.byWidgetPredicate((w) => w is FAutocomplete),
+      find.byWidgetPredicate((w) => w is FAutocomplete).first,
       'banda',
     );
     await _settle(tester);
@@ -200,6 +206,18 @@ void main() {
 
     expect(find.text('HU-42'), findsOneWidget); // number now auto-filled
     expect(find.text(Strings.upload), findsOneWidget);
+
+    // A hospital not on the list can be created from the same form.
+    await tester.enterText(
+      find.byWidgetPredicate((w) => w is FAutocomplete).last,
+      'Zomba Central',
+    );
+    await _settle(tester);
+    expect(backend.log, contains('GET /hospitals?q=Zomba+Central'));
+    await tester.tap(find.text(Strings.createHospitalNamed('Zomba Central')));
+    await _settle(tester);
+    expect(backend.log, contains('POST /hospitals'));
+    expect(find.text(Strings.hospitalChosen), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
   });
 
@@ -216,21 +234,19 @@ void main() {
 
     // The overview leads the workspace; the queue is one page over.
     expect(find.text(Strings.selectCase), findsNothing);
-    expect(find.text(Strings.statsAgreement), findsOneWidget);
 
     // Case management is its own page, reached from the sidebar.
     await tester.tap(find.textContaining(Strings.cases).first);
     await tester.pump();
     expect(find.text(Strings.selectCase), findsOneWidget);
 
-    // Intake is where new cases are added and ticks are handed over.
+    // Intake is where ticks are handed over to a doctor.
     await tester.tap(find.text(Strings.intakeTab));
     await tester.pump();
-    expect(find.text(Strings.uploadCase), findsOneWidget);
     expect(find.text('${Strings.assign} (0)'), findsOneWidget);
 
     final admin = tester
-        .element(find.text(Strings.uploadCase))
+        .element(find.text('${Strings.assign} (0)'))
         .read<AdminState>();
     await tester.tap(find.byIcon(FLucideIcons.square).first);
     await tester.pump();
@@ -273,7 +289,34 @@ void main() {
     await tester.pump(const Duration(seconds: 10));
   });
 
-  testWidgets('an admin drills into the case list from the charts', (
+  testWidgets('an admin opens a waiting review from the dashboard', (
+    tester,
+  ) async {
+    final backend = FakeBackend(role: 'admin');
+    backend.cases[1] = caseJson(1, status: 'submitted');
+    final session = SessionState(api: backend.api);
+    addTearDown(session.dispose);
+    await tester.runAsync(() => session.login('admin@test', 'secret'));
+    await _pumpApp(tester, session);
+    await _settle(tester);
+
+    // The opening line says what waits, and the queue lists the case.
+    expect(find.textContaining(Strings.summarySignOffOne), findsOneWidget);
+    final admin = tester
+        .element(find.text(Strings.teamTitle))
+        .read<AdminState>();
+    expect(admin.statusFilter, isNull);
+
+    await tester.ensureVisible(find.text(Strings.actionReview));
+    await tester.tap(find.text(Strings.actionReview));
+    await _settle(tester);
+    expect(admin.statusFilter, CaseStatus.submitted);
+    expect(admin.open?.id, 1);
+    expect(find.byType(CaseList), findsOneWidget);
+    await tester.pump(const Duration(seconds: 10));
+  });
+
+  testWidgets('an admin opens what to create from the fab pop-ups', (
     tester,
   ) async {
     final backend = FakeBackend(role: 'admin');
@@ -283,24 +326,26 @@ void main() {
     await _pumpApp(tester, session);
     await _settle(tester);
 
-    final admin = tester
-        .element(find.text(Strings.workloadQuestion))
-        .read<AdminState>();
-    expect(admin.statusFilter, isNull);
+    // The create button first asks what to make.
+    await tester.tap(find.byIcon(FLucideIcons.plus));
+    await _settle(tester);
+    expect(find.text(Strings.uploadCase), findsOneWidget);
+    expect(find.text(Strings.createUser), findsOneWidget);
 
-    // The donut's legend rows are the charts' drilldown: tap the slice's
-    // label and the overview hands the admin over to the filtered queue.
-    await tester.tap(find.text('Assigned 2'));
-    await tester.pump();
-    expect(admin.statusFilter, CaseStatus.assigned);
-    expect(find.byType(CaseList), findsOneWidget);
+    // Picking one floats the form in as a pop-up panel.
+    await tester.tap(find.text(Strings.createUser));
+    await _settle(tester);
+    expect(find.text(Strings.fullName), findsOneWidget);
+    expect(find.text(Strings.email), findsOneWidget);
 
-    // Back on the overview, tap again to show every case.
-    await tester.tap(find.text(Strings.dashboard).last);
-    await tester.pump();
-    await tester.tap(find.text('Assigned 2'));
-    await tester.pump();
-    expect(admin.statusFilter, isNull);
+    // Close the panel, then file a case the same way.
+    await tester.tap(find.byIcon(FLucideIcons.x));
+    await _settle(tester);
+    await tester.tap(find.byIcon(FLucideIcons.plus));
+    await _settle(tester);
+    await tester.tap(find.text(Strings.uploadCase));
+    await _settle(tester);
+    expect(find.text(Strings.chooseImage), findsOneWidget);
     await tester.pump(const Duration(seconds: 10));
   });
 

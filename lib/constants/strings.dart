@@ -19,7 +19,6 @@ class Strings {
   static const appName = "Kazuni Lungcxr";
   static const adjust = "Adjust";
   static const pan = "Pan";
-  static const resetAdjustments = "Reset adjustments";
   static const reset = "Reset";
   static const undo = "Undo";
   static const clearMarks = "Clear marks";
@@ -43,12 +42,6 @@ class Strings {
   static const awaitingModel = "Awaiting model";
   static const activateXai = "Activate XAI";
   static const imageLoadFailed = "Could not load X-ray image";
-  static const chat = "Assistant";
-  static const chatEmpty = "Ask a question about this X-ray.";
-  static const chatHint = "Type a message";
-  static const send = "Send";
-  static const chatModelOffline =
-      "The TB model isn't connected yet, so I can't answer questions about this X-ray.";
   static const labelMark = "Label this mark";
   static const editLabel = "Edit label";
   static const markNote = "Comment";
@@ -131,6 +124,7 @@ class Strings {
 
   // Admin
   static const cases = "Cases";
+  static const create = "Create";
   static const all = "All";
   static const noCasesAdmin = "No cases match this filter";
   static const waitingOnModel =
@@ -141,7 +135,7 @@ class Strings {
       "Patient name (or hospital number, to reuse a patient)";
   static const patientReuse =
       "Pick a suggestion to reuse that patient's record";
-  static const hospitalNumber = "Hospital number (optional)";
+  static const hospitalNumber = "Patient file number (optional)";
   static const chooseImage = "Choose X-ray (PNG or JPEG)";
   static const upload = "Upload";
   static const caseUploaded = "Case created";
@@ -186,16 +180,19 @@ class Strings {
   static const clearDueDate = "Clear";
   static const stats = "Statistics";
   static const dashboard = "Dashboard";
-  static const dashboardClear = "All clear";
   static const statsOpen = "Open";
   static const statsSubmitted = "Submitted";
   static const statsAccepted = "Accepted";
-  static const statsAgreement = "Model agreement";
   static const statsWaiting = "Readings waiting on the model";
   static const export = "Export";
   static const exportReviews = "Reviews CSV";
   static const exportFeedback = "Model feedback CSV";
   static const exportCopied = "rows copied to clipboard";
+  static const exportSaved = "rows saved to";
+  static const exportDownload = "Download";
+  static const exportCopy = "Copy to clipboard";
+  static const exportHint =
+      "Downloads a .csv file that opens in Excel or Sheets. Patient names and hospital numbers are left out.";
   static const exportRows = "rows";
   static const xrayTab = "X-ray";
   static const casesTab = "Cases";
@@ -213,16 +210,63 @@ class Strings {
   static const teamTab = "Team";
   static const detailTab = "Case";
   static const intakeTab = "Intake";
-  static const insightsTab = "Insights";
-  static const workloadQuestion = "Who holds the open work?";
-  static const queueQuestion = "Where is the queue piling up?";
-  static const chartTapDoctor = "Tap a doctor's bar to show only their cases";
-  static const chartTapStatus = "Tap a slice to filter the case list";
-  static const chartsTopDoctors = "Showing the 8 busiest doctors";
+  // Dashboard: a work queue first, a report second.
+  static const nothingWaits = "Nothing waits for you right now.";
+  static const queueSignOff = "Waiting for your sign-off";
+  static const queueOverdue = "Past due";
+  static const queueUnassigned = "Not assigned";
+  static const queueEmptySignOff = "No reviews to sign off";
+  static const queueEmptyOverdue = "No case is past its due date";
+  static const queueEmptyUnassigned = "Every case has a doctor";
+  static const actionReview = "Review";
+  static const actionAssign = "Assign";
+  static const actionOpen = "Open";
+  static const showAll = "Show all";
+  static const waiting = "waiting";
+  static const late = "late";
+  static const uploaded = "uploaded";
+  static const ago = "ago";
+  static const justNow = "just now";
+  static const minuteOne = "minute";
+  static const minuteMany = "minutes";
+  static const hourOne = "hour";
+  static const hourMany = "hours";
+  static const dayOne = "day";
+  static const dayMany = "days";
+  static const summarySignOffOne = "review waits for your sign-off.";
+  static const summarySignOffMany = "reviews wait for your sign-off.";
+  static const summaryOverdueOne = "case is past due.";
+  static const summaryOverdueMany = "cases are past due.";
+  static const summaryUnassignedOne = "case needs a doctor.";
+  static const summaryUnassignedMany = "cases need a doctor.";
+  static const summaryWithDoctorsOne = "case is with doctors.";
+  static const summaryWithDoctorsMany = "cases are with doctors.";
+  static const teamTitle = "Doctors";
+  static const teamHint =
+      "Fewest open cases first, so the next assignment is obvious";
+  static const hasRoom = "Has room";
+  static const noOpenCases = "No open cases";
+  static const open = "open";
+  static const oldest = "oldest";
+  static const modelTitle = "Model";
+  static const modelHint =
+      "Compared on submitted reviews where both gave a TB or no-TB answer";
+  static const agreed = "agreed with the model";
+  static const agreeOf = "of";
+  static const tooFewToJudge =
+      "Too few reviews to judge yet. The rate shows from";
+  static const reviews = "reviews";
+  static const agreeLow = "Low";
+  static const agreeHealthy = "Healthy";
+  static const agreeNone = "No review to compare with the model yet";
+  static const flaggedKinds = "How doctors flagged the model";
+  static const reviewFlagged = "Review flagged cases";
+  static const verdictMix = "Doctors' verdicts";
+  static const noneYet = "None yet";
+  static const chartsTopDoctors = "Showing 8 doctors";
   static const statsDeferred =
       "Statistics are unavailable right now — the stats endpoint failed. "
-      "The case list below still works; try Refresh.";
-  static const dashboardFilterOn = "Filtering";
+      "The Cases page still works; try Refresh.";
 
   static const String somethingWentWrong =
       "Something Went Wrong. Please try again later.";
@@ -230,4 +274,44 @@ class Strings {
   static String enterPassword = "Enter password";
 
   static String tamaraBandaemail = "tbanda@mwaiwathu.com";
+
+  // Hospitals
+  static const hospital = "Hospital";
+  static const hospitals = "Hospitals";
+  static const hospitalsSubtitle =
+      "Where X-rays come from. Doctors can also add one while filing a case.";
+  static const hospitalHint = "Hospital (optional)";
+  static const hospitalHelp =
+      "Type to find a hospital, or pick \"Create\" to add a new one.";
+  static const hospitalChosen = "Hospital selected.";
+  static const creatingHospital = "Adding hospital…";
+  static String createHospitalNamed(String name) => 'Create "$name"';
+  static const hospitalSearchOrAdd = "Find or name a hospital";
+  static const addHospital = "Add";
+  static const noHospitals = "No hospitals yet.";
+  static const noHospitalMatch = "No hospital matches; add it.";
+
+  // Uploading
+  static const uploading = "Uploading…";
+
+  // Case list
+  static const hideCase = "Remove from my list";
+  static const caseHidden = "Case removed from your list";
+  static const caseHiddenDetail =
+      "Nothing was deleted; the admin still sees it.";
+  static const showCases = "Show cases";
+  static const hideCaseList = "Collapse case list";
+  static const resizeReview = "Resize review panel";
+
+  // Segmentation re-evaluation
+  static const reevaluate = "Re-evaluate";
+  static const reevaluateTip =
+      "Send the corrected lung mask to the model for a new reading";
+  static const modelReadingNow = "Model reading…";
+  static const reevaluateSent = "Sent for re-evaluation";
+  static const reevaluateSentDetail =
+      "The model is reading the X-ray with your corrected mask.";
+  static const reevaluateFailed = "Could not re-evaluate";
+  static const reevaluated = "Re-evaluated with your corrected mask";
+  static const correctedMask = "corrected mask";
 }

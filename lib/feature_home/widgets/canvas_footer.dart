@@ -67,8 +67,7 @@ class CanvasFooter extends StatelessWidget {
         ),
         child: LayoutBuilder(
           builder: (context, constraints) {
-            final wide =
-                constraints.maxWidth >= AppSizes.narrowBreakpoint;
+            final wide = constraints.maxWidth >= AppSizes.narrowBreakpoint;
             return Row(
               spacing: AppSizes.gap10,
               children: [
