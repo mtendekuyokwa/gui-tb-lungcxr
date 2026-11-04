@@ -1,4 +1,4 @@
-# LungCXR Flask backend, CPU-only. Built by Railway from server/ (see RAILWAY.md).
+# LungCXR Flask backend, CPU-only. Built by Railway from server/ (see DEPLOY.md).
 FROM python:3.14-slim
 
 ENV PYTHONDONTWRITEBYTECODE=1 \

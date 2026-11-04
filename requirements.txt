@@ -1,0 +1,7 @@
+# For hosts that install dependencies from the repo root (e.g. Pella).
+# The backend itself lives in server/; its pins are in server/requirements.txt.
+# CPU-only PyTorch: the default PyPI build bundles gigabytes of CUDA.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
+-r server/requirements.txt

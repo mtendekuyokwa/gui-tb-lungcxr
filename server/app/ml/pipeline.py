@@ -5,11 +5,10 @@ import numpy as np
 from PIL import Image
 
 from . import preprocess
+from .files import CLASSIFIER_FILE, SEGMENTER_FILE
 from .classifier import Classifier
 from .segmenter import Segmenter
 
-SEGMENTER_FILE = "cxr_lung_segment_including_heart_512.pt"
-CLASSIFIER_FILE = "tb_classifier.pth"
 # Below this share of the image, the "lungs" are not lungs.
 MIN_LUNG_FRACTION = 0.02
 

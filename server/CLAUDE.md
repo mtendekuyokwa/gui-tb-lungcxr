@@ -22,7 +22,7 @@ LUNGCXR_TEST_CXR=/path/to/real_cxr.png .venv/bin/python -m pytest -q   # also ru
 .venv/bin/python -m pytest -q -k test_reassign_hides_previous_draft   # single test
 ```
 
-**Deployment** (Railway): `Dockerfile` + `start.sh` + `railway.json`, steps in `RAILWAY.md`. `start.sh` runs `init-db`, `ensure-admin` (first admin from `LUNGCXR_ADMIN_EMAIL/PASSWORD`), `fetch-models` (downloads missing weights from `LUNGCXR_SEGMENTER_URL`/`LUNGCXR_CLASSIFIER_URL`), `worker --once`, then one gunicorn worker with threads; `GET /api/v1/health` is the unauthenticated health check. Inline model runs are serialised by `worker._model_lock` (Grad-CAM hooks are not thread-safe).
+**Deployment**: steps in `DEPLOY.md`. Railway builds `Dockerfile`; hosts that run `gunicorn main:app` from the repo root (Pella) use the root `main.py` + `gunicorn.conf.py` + `requirements.txt`. Boot steps live in `app/deploy.py` (shared by both). `start.sh` runs `init-db`, `ensure-admin` (first admin from `LUNGCXR_ADMIN_EMAIL/PASSWORD`), `fetch-models` (downloads missing weights from `LUNGCXR_SEGMENTER_URL`/`LUNGCXR_CLASSIFIER_URL`), `worker --once`, then one gunicorn worker with threads; `GET /api/v1/health` is the unauthenticated health check. Inline model runs are serialised by `worker._model_lock` (Grad-CAM hooks are not thread-safe).
 
 Config is environment only: `LUNGCXR_SECRET_KEY`, `LUNGCXR_DATABASE_URI` (default SQLite at `instance/lungcxr.db`), `LUNGCXR_STORAGE_DIR` (default `storage/`), `LUNGCXR_CORS_ORIGINS`. There are no migrations yet: tables come from `db.create_all()`. `_ensure_schema` in `app/__init__.py` creates missing tables and adds the columns listed in `_ADDED_COLUMNS` to an existing dev database on startup; add new columns there instead of deleting the database.
 

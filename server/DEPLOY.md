@@ -1,10 +1,44 @@
-# Deploying the backend on Railway
+# Deploying the backend
+
+Two supported ways, sharing the same boot steps (`app/deploy.py`): create
+missing tables, create the first admin, download missing model files, read
+anything still queued.
+
+- **Pella, or any host that runs `gunicorn main:app` from the repo root**:
+  uses `main.py`, `gunicorn.conf.py` and `requirements.txt` at the repo root.
+- **Railway**: builds `server/Dockerfile`.
+
+## Pella (`gunicorn main:app`)
+
+The repo root holds what such hosts look for:
+
+- `requirements.txt`: CPU-only PyTorch, then `server/requirements.txt`.
+- `main.py`: puts `server/` on the import path, runs the boot steps, exposes `app`.
+- `gunicorn.conf.py`: read automatically by gunicorn from the working
+  directory: 1 process with 4 threads, 180 s timeout (uploads are read by the
+  model inside the request), app preloaded so the boot steps run once.
+
+Set these as environment / startup variables if the host has them (all optional):
+
+| Variable | Purpose |
+|---|---|
+| `LUNGCXR_SECRET_KEY` | Without it a random key is generated once into `server/instance/secret_key`. |
+| `LUNGCXR_ADMIN_EMAIL`, `LUNGCXR_ADMIN_PASSWORD` | First admin. Without them, `admin@lungcxr.local` is created with a random password written to `server/instance/initial-admin.txt` (open it in the file manager, sign in, change the password, delete the file). |
+| `LUNGCXR_SEGMENTER_URL`, `LUNGCXR_CLASSIFIER_URL` (+ `_SHA256`) | Model download, as below. Or upload the two files into `server/models/` with the file manager and restart. |
+| `LUNGCXR_CORS_ORIGINS` | The web app's origin. |
+
+Data lives under `server/` (`instance/lungcxr.db`, `storage/`, `models/`),
+so the host's disk must persist across restarts and redeploys. The models
+need roughly 1.5–2 GB of RAM.
+
+
+## Railway
 
 One Railway service built from `server/Dockerfile`, with a volume for the
 SQLite database, uploaded X-rays and the model files. `railway.json` sets
 the Dockerfile builder, the health check and the restart policy.
 
-## One-time setup
+### One-time setup
 
 1. **New project → Deploy from GitHub repo** → pick this repo and branch.
 2. Service **Settings → Source → Root Directory**: `server`
@@ -32,7 +66,7 @@ the Dockerfile builder, the health check and the restart policy.
 5. **Settings → Networking → Generate Domain.** The API is then at
    `https://<domain>/api/v1` (Swagger UI at `/api/v1/`).
 
-## What happens on each boot (`start.sh`)
+### What happens on each boot (`start.sh`)
 
 `init-db` (create missing tables; `_ensure_schema` adds new columns) →
 `ensure-admin` → `fetch-models` (only missing files) → `worker --once`
@@ -45,13 +79,13 @@ Uploads are read inline (about 7 s on 4 vCPUs), so the service needs
 roughly 1.5–2 GB of RAM. Without model files the API still works and cases
 show "Awaiting model" until the next boot finds them.
 
-## Pointing the Flutter app at it
+### Pointing the Flutter app at it
 
 ```bash
 flutter build web --dart-define=API_BASE_URL=https://<domain>/api/v1
 ```
 
-## Useful one-offs
+### Useful one-offs
 
 With the Railway CLI linked to the service (`railway link`):
 

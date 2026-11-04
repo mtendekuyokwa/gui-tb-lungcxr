@@ -110,3 +110,17 @@ def run_model_inline(case_id, limit=1):
         except Exception:
             current_app.logger.warning("Inline model run failed.", exc_info=True)
             return 0
+
+
+def drain_queue(app):
+    """Reads every case still queued, oldest first, through the same
+    serialised inline path as uploads. Meant for a background thread at boot,
+    so readings queued while the model files were missing get done."""
+    with app.app_context():
+        case_ids = [
+            case_id for (case_id,) in db.session.query(Prediction.case_id)
+            .filter_by(state=QUEUED).order_by(Prediction.id).distinct()
+        ]
+        for case_id in case_ids:
+            run_model_inline(case_id)
+        db.session.remove()
